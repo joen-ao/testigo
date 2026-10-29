@@ -21,7 +21,7 @@ def main():
         for name, cmd in procs:
             running.append((name, subprocess.Popen(cmd, cwd=config.ROOT)))
         print("portal       %s/orders/new?scenario=clean" % s.portal_url)
-        print("interceptor  http://localhost:%d/  (status page; UI comes with F11)" % s.interceptor_port)
+        print("interface    http://localhost:%d/   (status: /status)" % s.interceptor_port)
         print("simulation only - no real money, no real accounts. Ctrl+C to stop.", flush=True)
         while True:
             for name, p in running:

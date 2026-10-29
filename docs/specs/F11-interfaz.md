@@ -82,3 +82,63 @@ No hay código de interfaz todavía. F0 dejó el servicio del interceptor (`inte
 1. **Contrato de eventos (F0 hueco 8).** F11 necesita que cada evento tenga sus campos fijos. `check.result` ya está definido; `agent.step`, `frame.captured`, `approval.*`, `verify.result` y `receipt.signed` los cierra cada feature que los emite. F11 consume lo que haya; si falta un campo, se pide primero en el spec de esa feature.
 2. **Vista 3.** Mostrar la corrida sin supervisor y el pago al atacante necesita que el interceptor pueda emitir eventos también en modo `--no-supervisor` (o que la vista lea el registro del portal). Decidirlo en F3.
 3. **Servir `runs/`.** La interfaz sirve capturas y recortes desde `runs/`, que es git-ignorada; en la demo están presentes localmente, nunca en el repositorio.
+
+## Implementación (28 de octubre)
+
+Hecho y probado offline (`tests/test_ui.py`, `agent/test_loop.py`); las 9 vistas se revisaron en el navegador a 1440×900 con eventos de prueba.
+
+- **Transporte (F11-D1).** El loop publica cada evento en un *sink* (`interceptor/sink.py`, `HttpSink` → `POST /events`). El servicio guarda la corrida en memoria (`interceptor/hub.py`) y la reenvía por `WS /ws`: primero el historial (una página que abre tarde lo ve todo) y luego cada evento nuevo. `POST /events` y `/events/reset` solo aceptan conexiones locales. El sink es de mejor esfuerzo: si el servicio está caído, la corrida y el veredicto no cambian (hay prueba).
+- **Interfaz (F11-D2).** `ui/index.html`, `ui/app.css`, `ui/app.js`: HTML, CSS y JS estáticos servidos en `/`, sin build. La vista actual va en la URL (`#/4`); flechas y teclas 0–8 para navegar, `A` para seguir los eventos.
+- **Archivos.** `GET /api/policy` (vista 1), `GET /api/receipt` (el `receipt.json` más reciente bajo `runs/`, o `?path=`), `POST /api/verify` (corre el `testigo verify` real como subproceso y devuelve su salida, criterio 4), `GET /api/bench` (`runs/bench_results.json` o «no disponible», criterio 5), `GET /runs/<ruta>` (solo PNG/JPEG, sin salir de `runs/`).
+- **Datos de prueba.** `python -m tests.demos.ui_replay a3 --both` reproduce corridas de los fixtures con `test_data: true`, y la interfaz muestra una franja «Test data — no grabar». No sirve para el video.
+- **Estado (F11-D4).** La página no guarda nada; reconstruye todo desde los eventos. Guarda por separado la corrida sin supervisor (vista 3) y la supervisada (vistas 2, 4–7).
+
+### Quién puede hablarle al servicio
+
+La revisión de código encontró que cualquier pestaña del navegador local (el portal incluido) podía inyectar eventos falsos —por ejemplo un `verify.result` «match» sin la franja de datos de prueba— o borrar una corrida en plena grabación, porque el chequeo de loopback no alcanza: el navegador también conecta desde 127.0.0.1. Ahora:
+
+- Toda petición necesita un `Host` local (contra DNS rebinding).
+- Si la petición trae `Origin`, tiene que ser el del propio servicio. El portal, en otro puerto, es otro origen y queda fuera. El WebSocket hace el mismo chequeo, porque los navegadores no aplican la política de mismo origen a los WebSockets.
+- `POST /events` exige `Content-Type: application/json`, que un `fetch` no-cors no puede enviar.
+- Cada tipo de evento valida los campos que usan las vistas; un evento mal formado se rechaza en vez de romper la página en cada recarga.
+
+### Cambios al contrato de eventos
+
+En `interceptor/events.py` (todos opcionales o nuevos, compatibles hacia atrás):
+
+| Evento o campo | Para qué | Lo llena |
+| --- | --- | --- |
+| `run.started` (`mode`, `scenario`, `variant`) | Separar la corrida sin supervisor de la supervisada | El loop, ya |
+| `payment.executed` (`recipient`, `amount_cop`) | Vista 3: el pago que pasó sin supervisor; vista 6: el registro del portal | El loop, ya (desde `driver.last_payment`) |
+| `frame.captured.image` | La captura detrás de las cajas de SAM (vistas 2–4) | F3: el driver guarda la captura en `runs/` y pone `Capture.image` |
+| `approval.requested.images`, `verify.result.images` | Los recortes PNG de las vistas 5 y 6 | F4/F8: guardar los recortes en `runs/` |
+| `receipt.signed.path` | Qué `receipt.json` muestra la vista 7; sin él, la vista avisa «Not from this run» | F9: escribir el recibo firmado en `runs/` |
+| `approval.granted.granted` | La respuesta explícita de la persona (la voz puede coincidir y el passkey faltar) | El loop, ya |
+
+Mientras un campo falte, la vista lo dice en pantalla («No screenshot in this event», «crop image not in this event») y no inventa nada.
+
+### Lo que F10 debe escribir para la vista 8
+
+La vista 8 lee `runs/bench_results.json` y usa solo `summary`:
+
+```json
+{
+  "summary": {
+    "attacks_succeed_without_pct": 0,
+    "attacks_succeed_with_pct": 0,
+    "by_attack": {"a1": {"without_pct": 0, "with_pct": 0}, "a2": {}, "a3": {}},
+    "false_positives": {"count": 0, "clean_runs": 0},
+    "mean_added_latency_ms": 0
+  },
+  "rows": []
+}
+```
+
+Si el archivo no existe o no trae `summary`, la vista muestra «—% → —%» y el aviso de que aún no hay resultados.
+
+### Pendiente
+
+- Vista 1 en vivo (micrófono y Voice) depende de F1 con claves; hoy muestra la transcripción guardada en la política firmada.
+- Vista 3: el zoom sobre el texto escondido necesita una región del canal de píxeles en el modo sin supervisor (decidirlo en F3).
+- Vista 5: el passkey real (WebAuthn) es F7; hoy el botón refleja `approval.granted`.
+- Los recibos de `runs/evidence/` son de antes de que F1 cambiara la política, así que `testigo verify` los rechaza en el paso 1. Es la salida real; se arregla cuando F9 firme los recibos dentro del loop.

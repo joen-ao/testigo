@@ -44,15 +44,19 @@ class Capture:
                  NOT including anything the page hides.
     crops        label -> bytes of the cropped PNG for that region, used for
                  hashing the approved and executed evidence.
+    image        where the driver saved the screenshot, relative to runs/
+                 (the interface shows it; None until the real driver saves one).
     """
 
-    def __init__(self, frame, code_lines, rendered_lines, crops, screenshot=b"", ts=None):
+    def __init__(self, frame, code_lines, rendered_lines, crops, screenshot=b"", ts=None,
+                 image=None):
         self.frame = frame
         self.code_lines = [_norm(x) for x in code_lines]
         self.rendered_lines = [_norm(x) for x in rendered_lines]
         self.crops = crops or {}
         self.screenshot = screenshot
         self.ts = ts
+        self.image = image
 
     def sha(self):
         return sha_crop(self.screenshot or ("frame-%s" % self.frame))

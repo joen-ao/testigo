@@ -1,4 +1,5 @@
-"""F0 §14.1: the interceptor service answers with its status page."""
+"""F0 §14.1: the interceptor service answers with its status page (now at /status;
+/ is the F11 interface)."""
 
 import unittest
 
@@ -10,7 +11,7 @@ from interceptor.service import app
 class ServiceTests(unittest.TestCase):
     def test_status_page_and_health(self):
         c = TestClient(app)
-        r = c.get("/")
+        r = c.get("/status")
         self.assertEqual(r.status_code, 200)
         self.assertIn("TESTIGO+ interceptor", r.text)
         h = c.get("/health").json()

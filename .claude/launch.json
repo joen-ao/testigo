@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "testigo",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "scripts.up"],
+      "port": 8090
+    }
+  ]
+}

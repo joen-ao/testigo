@@ -5,6 +5,7 @@ if a field changes, it changes here first. The interface (WebSocket/SSE) and
 WitnessBench both read these shapes.
 
 Event types:
+  run.started         a run began (mode supervised|no_supervisor, scenario)
   agent.step          the agent proposed or completed a step
   frame.captured      a screenshot was taken
   check.result        the pre-action verdict (ok|divergence|policy_violation|cannot_verify)
@@ -12,6 +13,13 @@ Event types:
   approval.granted    the person approved (voice + passkey)
   verify.result       the after-the-click comparison (match|mismatch)
   receipt.signed      the signed receipt was written
+  payment.executed    what the portal recorded as paid (both modes; view 3)
+
+Optional fields added by F11 (absent until the producer has them):
+  frame.captured.image        screenshot path, relative to runs/
+  approval.requested.images   {"amount": path, "recipient": path} crop PNGs
+  verify.result.images        {"approved": {...}, "executed": {...}} crop PNGs
+  receipt.signed.path         receipt.json path, relative to runs/
 
 check.result.status is one of: ok, divergence, policy_violation, cannot_verify.
 When status is ok and the action is a payment, the engine follows it with an
@@ -31,6 +39,12 @@ CANNOT_VERIFY = "cannot_verify"
 MATCH = "match"
 MISMATCH = "mismatch"
 
+TYPES = frozenset({
+    "run.started", "agent.step", "frame.captured", "check.result",
+    "approval.requested", "approval.granted", "verify.result",
+    "receipt.signed", "payment.executed",
+})
+
 
 def _ts(ts=None):
     # RFC3339 with the demo's fixed -05:00 (Bogotá) offset.
@@ -39,13 +53,21 @@ def _ts(ts=None):
     return time.strftime("%Y-%m-%dT%H:%M:%S-05:00", time.localtime())
 
 
+def run_started(mode, scenario, variant=None, ts=None):
+    return {"type": "run.started", "ts": _ts(ts), "mode": mode,
+            "scenario": scenario, "variant": variant}
+
+
 def agent_step(frame, label, detail="", ts=None):
     return {"type": "agent.step", "frame": frame, "ts": _ts(ts),
             "label": label, "detail": detail}
 
 
-def frame_captured(frame, sha, ts=None):
-    return {"type": "frame.captured", "frame": frame, "ts": _ts(ts), "sha256": sha}
+def frame_captured(frame, sha, image=None, ts=None):
+    e = {"type": "frame.captured", "frame": frame, "ts": _ts(ts), "sha256": sha}
+    if image:
+        e["image"] = image
+    return e
 
 
 def check_result(frame, status, regions, code_only_text, pixels_only_text,
@@ -62,36 +84,55 @@ def check_result(frame, status, regions, code_only_text, pixels_only_text,
 
 
 def approval_requested(frame, amount_cop, recipient_text,
-                       crop_amount_sha, crop_recipient_sha, ts=None):
-    return {
+                       crop_amount_sha, crop_recipient_sha, images=None, ts=None):
+    e = {
         "type": "approval.requested", "frame": frame, "ts": _ts(ts),
         "amount_cop": amount_cop,
         "recipient": recipient_text,
         "crops": {"amount": crop_amount_sha, "recipient": crop_recipient_sha},
     }
+    if images:
+        e["images"] = images
+    return e
 
 
-def approval_granted(method, voice_transcript, voice_match, ts=None):
+def approval_granted(method, voice_transcript, voice_match, granted=True, ts=None):
+    """The person's answer. `granted` is false when they refused (voice did not
+    match, or the passkey was not given); the event name stays for the contract."""
     return {
         "type": "approval.granted", "ts": _ts(ts),
         "method": method,
         "voice_transcript": voice_transcript,
         "voice_match": voice_match,
+        "granted": bool(granted),
     }
 
 
-def verify_result(frame, status, approved, executed, ts=None):
-    return {
+def verify_result(frame, status, approved, executed, images=None, ts=None):
+    e = {
         "type": "verify.result", "frame": frame, "ts": _ts(ts),
         "status": status,
         "approved": approved,   # {"amount": sha, "recipient": sha}
         "executed": executed,   # {"amount": sha, "recipient": sha}
     }
+    if images:
+        e["images"] = images
+    return e
 
 
-def receipt_signed(receipt_id, signature, ts=None):
-    return {"type": "receipt.signed", "ts": _ts(ts),
-            "id": receipt_id, "signature": signature}
+def receipt_signed(receipt_id, signature, path=None, ts=None):
+    e = {"type": "receipt.signed", "ts": _ts(ts),
+         "id": receipt_id, "signature": signature}
+    if path:
+        e["path"] = path
+    return e
+
+
+def payment_executed(frame, recipient_acct, amount_cop, ts=None):
+    """What the portal recorded as paid. Emitted in both modes, so view 3 can
+    show the payment that went through without a supervisor."""
+    return {"type": "payment.executed", "frame": frame, "ts": _ts(ts),
+            "recipient": recipient_acct, "amount_cop": amount_cop}
 
 
 def region(label, box, text, confidence):

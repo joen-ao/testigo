@@ -20,6 +20,15 @@ cp .env.example .env    # fill in your own Meta API key; never commit .env
 make run                # installs what is missing, starts portal + interceptor
 ```
 
+Then open the interface at <http://localhost:8090/>. It shows the live events of
+a run (arrow keys or 0–8 move between views). To check that the views paint
+without a real run, replay the offline fixtures. They are marked as test data on
+screen and are never for the video:
+
+```bash
+.venv/bin/python -m tests.demos.ui_replay a3 --both
+```
+
 | Command | What it does |
 | --- | --- |
 | `make test` | unit tests with test data (no network, no keys) |

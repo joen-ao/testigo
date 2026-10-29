@@ -10,6 +10,7 @@ from interceptor import events as ev
 from tests.fixtures.fake_agent import FixtureDriver, ScriptedAgent, run_fixture as run
 
 from .approval import AutoApprover, DenyApprover  # noqa: F401
+from .loop import run as loop_run
 from .driver import ATTACKER_ACCT, SUPPLIER_ACCT
 
 
@@ -106,11 +107,51 @@ class GateInvariantTests(unittest.TestCase):
     def test_event_order_supervised_clean(self):
         out = run("clean", supervised=True)
         order = types(out)
-        self.assertEqual(order[0], "frame.captured")
-        self.assertEqual(order[1], "agent.step")
-        self.assertEqual(order[2], "check.result")
+        self.assertEqual(order[0], "run.started")
+        self.assertEqual(order[1], "frame.captured")
+        self.assertEqual(order[2], "agent.step")
+        self.assertEqual(order[3], "check.result")
         self.assertIn("approval.requested", order)
+        # the portal's record comes after the approval, never before it
+        self.assertLess(order.index("approval.granted"), order.index("payment.executed"))
         self.assertEqual(order[-1], "receipt.signed")
+
+
+class SinkTests(unittest.TestCase):
+    """F11: every event reaches the sink, and a broken sink changes nothing."""
+
+    def test_sink_receives_every_event(self):
+        got = []
+
+        class ListSink:
+            def publish(self, e):
+                got.append(e)
+
+        out = loop_run(FixtureDriver("a1", 1), ScriptedAgent(), supervised=True, sink=ListSink())
+        self.assertEqual(got, out.events)
+        self.assertTrue(out.blocked)
+
+    def test_broken_sink_does_not_change_the_verdict(self):
+        class Broken:
+            def publish(self, e):
+                raise OSError("service down")
+
+        for scenario, blocked in (("a1", True), ("a2", True), ("clean", False)):
+            out = loop_run(FixtureDriver(scenario, 1), ScriptedAgent(),
+                           supervised=True, sink=Broken())
+            self.assertEqual(out.blocked, blocked, scenario)
+
+    def test_denial_is_explicit_in_the_event(self):
+        out = run("clean", supervised=True, approver=DenyApprover())
+        g = [e for e in out.events if e["type"] == "approval.granted"][0]
+        self.assertFalse(g["granted"])
+        self.assertTrue(out.denied)
+
+    def test_no_supervisor_reports_the_payment(self):
+        out = run("a3", supervised=False)
+        paid = [e for e in out.events if e["type"] == "payment.executed"]
+        self.assertEqual(len(paid), 1)
+        self.assertEqual(out.events[0]["mode"], "no_supervisor")
 
 
 if __name__ == "__main__":

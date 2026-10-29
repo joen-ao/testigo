@@ -23,7 +23,7 @@ Specs de cada feature (objetivo, entradas y salidas, criterios de aceptación, q
 | `F8-verificacion.md` | Verificación antes de confirmar y después del clic | Borrador |
 | `F9-recibos-y-verify.md` | Recibos firmados y la CLI `verify` | Borrador |
 | `F10-witnessbench.md` | Las 20 corridas y los resultados | Borrador |
-| `F11-interfaz.md` | Las vistas conectadas a los eventos | Borrador |
+| `F11-interfaz.md` | Las vistas conectadas a los eventos | Borrador; implementada (WebSocket, 9 vistas, verify real, aviso de datos de prueba); faltan capturas y recortes reales (F3/F4), voz y passkey en vivo (F1/F7) |
 
 Cada spec en borrador abre con una tabla de decisiones propuestas y una sección «Hallazgos para los specs siguientes». Falta revisarlos y aprobarlos.
 

@@ -9,6 +9,9 @@ With supervised=False the interceptor is removed entirely (spec row 3 / View
 
 The driver and agent are passed in. Unit tests use the doubles in
 tests/fixtures/fake_agent.py; real runs use Playwright and Wonder (F3).
+
+Every event also goes to `sink` (F11): the interceptor service relays it to the
+interface. The sink is best effort and never changes the outcome.
 """
 
 from common.config import POLICY_PATH
@@ -23,8 +26,9 @@ CHECK_LATENCY_MS = 1400  # placeholder until the real SAM + Spark round trip is 
 
 
 class Outcome:
-    def __init__(self, mode, scenario, variant):
+    def __init__(self, mode, scenario, variant, sink=None):
         self.mode = mode
+        self.sink = sink
         self.scenario = scenario
         self.variant = variant
         self.events = []
@@ -52,13 +56,20 @@ class Outcome:
 
     def emit(self, e):
         self.events.append(e)
+        if self.sink is not None:
+            try:
+                self.sink.publish(e)
+            except Exception:  # noqa: BLE001 - the interface never stops a run
+                pass
         return e
 
 
-def run(driver, agent, supervised=True, approver=None, policy_path=POLICY_PATH):
+def run(driver, agent, supervised=True, approver=None, policy_path=POLICY_PATH, sink=None):
     approver = approver or AutoApprover()
     out = Outcome("supervised" if supervised else "no_supervisor",
-                  getattr(driver, "scenario", None), getattr(driver, "variant", None))
+                  getattr(driver, "scenario", None), getattr(driver, "variant", None),
+                  sink=sink)
+    out.emit(ev.run_started(out.mode, out.scenario, out.variant))
 
     policy = interceptor = decision = None
     if supervised:
@@ -66,7 +77,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=POLICY_PATH):
         interceptor = Interceptor(policy, driver.pixel_channel())
 
     obs = driver.observe()
-    out.emit(ev.frame_captured(obs.frame, obs.sha()))
+    out.emit(ev.frame_captured(obs.frame, obs.sha(), image=getattr(obs, "image", None)))
     action = agent.propose(obs)
     out.actions += 1
     out.emit(ev.agent_step(obs.frame, "proposed: %s" % action.get("kind"),
@@ -84,7 +95,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=POLICY_PATH):
             out.emit(decision.approval_event)
             granted, info = approver.approve(decision.approval_event)
             out.emit(ev.approval_granted(info["method"], info["voice_transcript"],
-                                         info["voice_match"]))
+                                         info["voice_match"], granted=granted))
             if not granted:
                 out.denied = True
                 return out
@@ -93,8 +104,11 @@ def run(driver, agent, supervised=True, approver=None, policy_path=POLICY_PATH):
     driver.execute(action)
     out.executed = True
     out.payment = driver.last_payment
+    if out.payment:
+        out.emit(ev.payment_executed(obs.frame, out.payment.get("recipient"),
+                                     out.payment.get("amount_cop")))
     after = driver.observe_after()
-    out.emit(ev.frame_captured(after.frame, after.sha()))
+    out.emit(ev.frame_captured(after.frame, after.sha(), image=getattr(after, "image", None)))
 
     if supervised and approved_crops is not None:
         vr = interceptor.verify(approved_crops, after)
