@@ -1,0 +1,21 @@
+# Secrets: never in the public repo (Meta rule: no signing keys, no API keys)
+.env
+.env.*
+!.env.example
+.secrets/
+*.key
+
+# Run outputs: captures, crops, receipts, audio, API usage, raw results
+runs/
+evidence/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+*.egg-info/
+
+# OS
+.DS_Store

@@ -1,0 +1,35 @@
+# Specs de TESTIGO+
+
+Documentos de diseño del proyecto. Se escriben antes del código y el código los sigue.
+
+| Archivo | Qué es |
+| --- | --- |
+| `00-spec-general.md` | Qué es TESTIGO+, objetivo, reglas de Meta, alcance, arquitectura, features (F0 a F11), riesgos y gate. Es la base de todos los demás. |
+| `01-spec-construccion.md` | Correcciones a las maquetas, piezas del sistema, portal simulado y ataques, vistas reales, formatos y orden de construcción. |
+| `02-spec-vistas-maquetas.md` | Spec de las 8 vistas y la portada usadas para las maquetas en Claude Design. |
+
+Specs de cada feature (objetivo, entradas y salidas, criterios de aceptación, qué se prueba con modelos reales y qué con datos de prueba, y qué del código actual se conserva):
+
+| Archivo | Feature | Estado |
+| --- | --- | --- |
+| `F0-infraestructura.md` | Estructura del repositorio, instalación, secretos, API de Meta, Playwright, pruebas, gate | Aprobado 28 oct; implementado salvo los scripts del gate |
+| `F1-mandato-y-politica.md` | Mandato por voz y política firmada | Borrador; implementado el núcleo offline (formato con cuenta atada, firma Ed25519, compilación desde texto); falta la compilación por voz real (Voice + Spark, necesita claves) |
+| `F2-portal-y-ataques.md` | Portal simulado y escenarios | Aprobado 28 oct |
+| `F3-agente-y-navegador.md` | Wonder con Playwright, con y sin supervisor | Borrador |
+| `F4-canal-de-pixeles.md` | SAM y Spark sobre la captura | Borrador |
+| `F5-comparacion-codigo-pixeles.md` | Divergencia código/píxeles y el filtro | Borrador; implementado el filtro «parece una instrucción», con el texto oculto legítimo probado |
+| `F6-motor-de-decision.md` | Las reglas de decisión | Borrador; implementado (cuenta atada por F1, divergencia filtrada por F5); falta la latencia medida (F4) |
+| `F7-aprobacion.md` | Cápsula con voz y passkey | Borrador; implementada la coincidencia de voz (número en español → entero, comparación contra los píxeles); faltan WebAuthn y Voice real (claves/navegador) |
+| `F8-verificacion.md` | Verificación antes de confirmar y después del clic | Borrador |
+| `F9-recibos-y-verify.md` | Recibos firmados y la CLI `verify` | Borrador |
+| `F10-witnessbench.md` | Las 20 corridas y los resultados | Borrador |
+| `F11-interfaz.md` | Las vistas conectadas a los eventos | Borrador |
+
+Cada spec en borrador abre con una tabla de decisiones propuestas y una sección «Hallazgos para los specs siguientes». Falta revisarlos y aprobarlos.
+
+Versiones editables en línea (fuente de verdad mientras se discuten; estos archivos son la copia del 28 de octubre de 2026):
+
+- Spec general: https://claude.ai/artifact/MDNnDhTk7WBsuwN8SzD8C8
+- Spec de construcción: https://claude.ai/artifact/ERY31GSR1FnpQS18TswN2b
+- Spec de vistas: https://claude.ai/artifact/V43w8x3LqticCCBDWSVcZ8
+- Maquetas (Claude Design): https://claude.ai/artifact/SoZszjAzJTnYJvehGp1dJ7

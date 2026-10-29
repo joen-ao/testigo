@@ -1,0 +1,20 @@
+# TESTIGO+ signed policy — the compiled output of Marta's spoken mandate (F1).
+# The interceptor enforces this; the agent cannot change it. Values are simulated.
+# The recipient is tied by name AND account (F1-D2): the account is not spoken in
+# the demo phrase, so it is taken from the portal catalogue and marked simulated.
+version: 1
+owner: marta
+source: voice
+transcript: "Solo puedes pagarle a Distribuidora X, máximo ciento cincuenta mil pesos"
+rules:
+  - pay_only:
+      - name: "Distribuidora X"
+        account: "310-XXX-4417"
+  - max_per_payment_cop: 150000
+  - ask_before: new_recipient
+signed_by: passkey:marta
+# sha256 over the canonical content (everything except sha256 and signature);
+# signature is an Ed25519 signature of the owner's key over the same content.
+# Both are stamped by policy/compile.py; the placeholders below are replaced.
+sha256: "0c46e7272685f8a11c48d3c93e8a1379fc74c3543dfd6107fb825f32fc74f18f"
+signature: "ed25519:9b96834a3add4ca1972c18694db597381b995313b345eab5359f2f69a1420cb2d436abedc7aafec33e731eeca4742e88b45456202fb6481db3235fb128ec930f"
