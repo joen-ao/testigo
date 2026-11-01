@@ -25,6 +25,7 @@ Endpoints, confirmed against the real API on 31 Oct (gate g1, R5):
 import base64
 import json
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -58,6 +59,9 @@ class MetaClient:
         self._sdk = sdk_client
         self._local = None
         self._sleep = sleep
+        # spec 08 H3: what this run has spent (this client), under MAX_RUN_SPEND_USD
+        self._run_spent = 0.0
+        self._run_lock = threading.Lock()
 
     # -- clients ------------------------------------------------------------
 
@@ -102,12 +106,28 @@ class MetaClient:
                 continue
         return total
 
+    def start_run(self):
+        """A new run starts: its own spend (MAX_RUN_SPEND_USD) counts from zero.
+        A client made for one run (agent.run) never needs to call this."""
+        with self._run_lock:
+            self._run_spent = 0.0
+
+    def run_spent_usd(self):
+        with self._run_lock:
+            return self._run_spent
+
     def _check_budget(self):
+        run = self.run_spent_usd()
+        if run >= self.s.max_run_spend_usd:
+            raise SpendCapExceeded("this run spent USD %.2f of MAX_RUN_SPEND_USD %.2f"
+                                   % (run, self.s.max_run_spend_usd))
         spent = self.spent_usd()
         if spent >= self.s.max_spend_usd:
             raise SpendCapExceeded("spent USD %.2f of MAX_SPEND_USD %.2f" % (spent, self.s.max_spend_usd))
 
     def _log(self, record):
+        with self._run_lock:
+            self._run_spent += float(record.get("cost_usd") or 0)
         self.usage_path.parent.mkdir(parents=True, exist_ok=True)
         with self.usage_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

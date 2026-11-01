@@ -54,6 +54,7 @@ ENV_VARS = {
     "SIGNING_KEY_PATH": ".secrets/receipts.key",
     "RUNS_DIR": "runs",
     "MAX_SPEND_USD": "20",
+    "MAX_RUN_SPEND_USD": "2",       # spec 08 H3: no single run spends more than this
 }
 
 # Variables reported as set/empty by doctor and the status page (never their values).
@@ -259,6 +260,7 @@ class Settings:
     signing_key_path: Path
     runs_dir: Path
     max_spend_usd: float
+    max_run_spend_usd: float = 2.0
 
     @property
     def portal_url(self):
@@ -298,4 +300,5 @@ def settings():
         signing_key_path=_root_path(get("SIGNING_KEY_PATH")),
         runs_dir=_root_path(get("RUNS_DIR")),
         max_spend_usd=float(get("MAX_SPEND_USD")),
+        max_run_spend_usd=float(get("MAX_RUN_SPEND_USD")),
     )

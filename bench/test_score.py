@@ -163,6 +163,10 @@ class FakeDriver:
 class FakeMeta:
     def __init__(self):
         self.spent = 0.0
+        self.runs_started = 0
+
+    def start_run(self):                     # spec 08 H3: the per-run cap restarts
+        self.runs_started += 1
 
     def spent_usd(self):
         self.spent += 0.05
@@ -195,7 +199,10 @@ class OneRunTests(unittest.TestCase):
                 mock.patch.object(bench_run, "SamSparkChannel", channel), \
                 mock.patch.object(bench_run, "open_portal", lambda *a, **k: FakeDriver()), \
                 mock.patch.object(bench_run.loop, "run", lambda driver, agent, **k: loop_run(chan["c"])):
-            return bench_run.one_run(FakeMeta(), scenario, 1, mode, Path(d), 5)
+            meta = FakeMeta()
+            row = bench_run.one_run(meta, scenario, 1, mode, Path(d), 5)
+            self.assertEqual(meta.runs_started, 1)       # spec 08 H3: each configuration has its own cap
+            return row
 
     def test_api_errors_make_an_error_row_not_a_block(self):
         def loop_run(c):

@@ -160,7 +160,8 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                     # F8-D2: the approval still leaves a signed receipt, blocked, no executed side
                     _sign_receipt(out, policy, approved["event"], approved["info"], approved["bytes"],
                                   None, vr, None, _agent_name(agent, policy), run_dir,
-                                  _key_for(driver, signing_key), obs.frame, blocked_at="review")
+                                  _key_for(driver, signing_key), obs.frame, blocked_at="review",
+                                  approved_screen=approved["screen"])
                     return out
             elif is_sensitive:
                 lat = FIXTURE_LATENCY_MS if getattr(driver, "is_test_double", False) else None
@@ -181,6 +182,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                     a = decision.approval_event
                     approved = {"event": a, "info": info, "crops": a["crops"],
                                 "bytes": {n: obs.crops.get(n, b"") for n in CROP_NAMES},
+                                "screen": getattr(obs, "screenshot", b"") or b"",
                                 "read": {"amount": usd(a["amount_cents"]), "address": a["address"]}}
 
         if supervised and is_sensitive and getattr(driver, "recapture_before_sensitive", False) \
@@ -228,7 +230,8 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
             out.receipt_flagged = vr["status"] != ev.MATCH
             _sign_receipt(out, policy, approved["event"], approved["info"], approved["bytes"],
                           after, vr, read or None, _agent_name(agent, policy),
-                          run_dir, _key_for(driver, signing_key), after.frame)
+                          run_dir, _key_for(driver, signing_key), after.frame,
+                          approved_screen=approved["screen"])
         return out
 
     out.max_steps = True
@@ -323,7 +326,7 @@ def _agent_name(agent, policy):
 
 
 def _sign_receipt(out, policy, approval_event, info, approved_bytes, after, vr, executed_read,
-                  agent_name, run_dir, signing_key, frame, blocked_at=None):
+                  agent_name, run_dir, signing_key, frame, blocked_at=None, approved_screen=b""):
     """F9: sign the receipt of the approved order (receipts/bundle.py). A
     missing key or an unwritable folder is reported, never fatal."""
     if signing_key is False:
@@ -339,7 +342,9 @@ def _sign_receipt(out, policy, approval_event, info, approved_bytes, after, vr, 
             executed_crops=bundle.crops_of(after) if after else None,
             executed_read=executed_read, verify_result=vr,
             status="blocked" if blocked_at else None, blocked_at=blocked_at,
-            run_dir=run_dir, agent=agent_name)
+            run_dir=run_dir, agent=agent_name,
+            approved_screen=approved_screen,
+            executed_screen=getattr(after, "screenshot", b"") if after else b"")
     except OSError as e:
         out.emit(ev.agent_step(frame, "receipt not written: %s" % e))
         return

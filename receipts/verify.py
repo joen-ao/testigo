@@ -162,6 +162,38 @@ def _crop_problems(side, hashes, evidence_dir):
     return probs
 
 
+SCREEN_FILES = {"approved": "approved_screen.png", "executed": "executed_screen.png"}
+
+
+def _screen_hash(receipt, side):
+    ev = receipt.get("evidence")
+    if isinstance(ev, dict) and isinstance(ev.get("screens"), dict):
+        return ev["screens"].get(side)
+    return None
+
+
+def _screen_problems(receipt, side, evidence_dir):
+    """Spec 08 H2: the whole screenshot of one side, when the receipt signed one.
+    Receipts without `evidence` (before 1 Nov) have nothing to check here."""
+    if "evidence" not in receipt or receipt["evidence"] is None:
+        return []
+    ev = receipt["evidence"]
+    if not isinstance(ev, dict) or not isinstance(ev.get("screens"), dict):
+        return ["evidence is not the expected shape"]
+    h = ev["screens"].get(side)
+    if h is None:
+        return []
+    if not isinstance(h, str) or not HASH_RE.match(h):
+        return ["%s screen hash is not a sha256 hex" % side]
+    if evidence_dir:
+        p = Path(evidence_dir, SCREEN_FILES[side])
+        if not p.is_file():
+            return ["%s screen file missing" % side]
+        if sha_crop(p.read_bytes()) != h:
+            return ["%s screen file does not match its recorded hash" % side]
+    return []
+
+
 def _check_executed(receipt, approved, evidence_dir):
     if receipt.get("status") == BLOCKED:
         return Check(4, "executed", True,
@@ -239,16 +271,21 @@ def verify_receipt(receipt_path, evidence_dir=None,
 
     # 3. approved crops: all recorded, and their files match
     approved = receipt["approved"]
-    probs = _crop_problems("approved", approved, evidence_dir)
+    probs = _crop_problems("approved", approved, evidence_dir) + _screen_problems(receipt, "approved", evidence_dir)
+    screen = " · whole screen matches" if evidence_dir and _screen_hash(receipt, "approved") else ""
     if probs:
         ok3, d3 = False, "; ".join(probs)
     elif evidence_dir:
-        ok3, d3 = True, "%d of %d hashes match" % (len(CROP_NAMES), len(CROP_NAMES))
+        ok3, d3 = True, "%d of %d hashes match%s" % (len(CROP_NAMES), len(CROP_NAMES), screen)
     else:
         ok3, d3 = True, "hashes recorded · files skipped (no evidence folder)"
     checks.append(Check(3, "approved", ok3, d3))
 
-    # 4. executed equals approved
-    checks.append(_check_executed(receipt, approved, evidence_dir))
+    # 4. executed equals approved (and the executed screen file, when recorded)
+    c4 = _check_executed(receipt, approved, evidence_dir)
+    extra = _screen_problems(receipt, "executed", evidence_dir)
+    if extra:
+        c4 = Check(4, "executed", False, "; ".join(([c4.detail] if not c4.ok and c4.detail else []) + extra))
+    checks.append(c4)
 
     return Result(str(receipt.get("id", "?")), checks, pinned=pinned_pubkey is not None)

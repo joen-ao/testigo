@@ -339,10 +339,52 @@ is hard to fool on its own: with the hardened attacks it fell for the forged
 address in 3 of 5 runs once and in 0 of 5 the next time. TESTIGO+ does not
 depend on that: it held all 15 attacks from the screen and the signed policy.
 
+## Security model
+
+TESTIGO+ is a research prototype, not a production control. This is what it
+protects, what it trusts, and where it stops (spec 08).
+
+**What it protects.** One decision: the click that confirms an order. The
+order may only go where the owner's signed rules allow, for at most the signed
+amount, after a person approved exactly what the screen showed.
+
+| Trusted | Not trusted |
+| --- | --- |
+| The owner's signed policy (Ed25519, checked by hash; an edited or unsigned one is never used, and never silently replaced by the committed one) | The agent: what it says, what it plans, its summary of the page |
+| The decision rules in code (`interceptor/engine.py`): the models extract, the code decides | The page code (DOM): it can hide text from the screen (A1) |
+| The person's approval of the exact crops of the screen | The page's pixels on their own: they can carry text the code does not (A2) or an address the rules do not allow (A3), or change while the agent decides (A4) |
+| This machine: the owner key in `.secrets/`, the evidence in `runs/` | The models' answers: off-schema, unsure or failed reads are `cannot_verify`, never allowed |
+
+**What the receipt signs.** The policy hash; the amount and address read from
+the pixels; the sha256 of each approved and executed crop and of each whole
+screenshot; what was read after the click and how it compared; how the person
+approved; and the model ids used. `testigo verify` rechecks the signature and
+every file next to the receipt. An edited field breaks the signature; a swapped
+crop or screenshot breaks its hash.
+
+**What it does not guarantee.**
+- The decision depends on what Spark and SAM 3.1 read. A misread is caught
+  only when two reads disagree or the region is unsure; a consistent misread
+  is not.
+- The instruction filter is a heuristic. An instruction written only in words,
+  with no address, slips past it (`a1edge`, measured apart).
+- We designed the attacks ourselves, on a simulated portal. A real site can
+  behave in ways this benchmark did not foresee.
+- The owner key and the evidence are files on this machine. Whoever controls
+  the machine can sign. There is no HSM, no write-once store and no time
+  stamping authority; the receipt proves what this machine saw, not more.
+- The browser is not sandboxed beyond Playwright's defaults, and the voice
+  confirms intent, not identity (no passkey in this prototype).
+
+The rules above are tested one by one in `tests/security/test_matrix.py`
+(no models).
+
 ## Rules we keep
 
 - Keys stay in `.env` and `.secrets/`; evidence stays in `runs/`. All three are
   git-ignored, and `make check-secrets` runs before every commit.
+- `MAX_SPEND_USD` caps all model spend and `MAX_RUN_SPEND_USD` (default 2) caps
+  any single run; at either cap the call is refused and the check fails closed.
 - Test data is for unit tests only, never for WitnessBench or the video.
 - No real money, addresses or brands.
 

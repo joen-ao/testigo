@@ -17,7 +17,7 @@ from pathlib import Path
 from common import config
 from common.money import usd
 from . import keys
-from .receipt import CROP_NAMES, build, dumps
+from .receipt import CROP_NAMES, build, dumps, sha_crop
 
 
 def signing_seed(key=None):
@@ -47,7 +47,8 @@ def crops_of(capture):
 
 def sign_order(policy, approval_event, approval_info, approved_crops, seed,
                  executed_crops=None, executed_read=None, verify_result=None,
-                 run_dir=None, agent="agent", status=None, blocked_at=None):
+                 run_dir=None, agent="agent", status=None, blocked_at=None,
+                 approved_screen=b"", executed_screen=b""):
     """Build and sign the receipt of an approved order: confirmed, or blocked
     before confirming (`status="blocked"`, `blocked_at="review"`, F8-D2).
 
@@ -64,6 +65,10 @@ def sign_order(policy, approval_event, approval_info, approved_crops, seed,
 
     The executed side records exactly the crops written next to the receipt;
     with none, executed is null (not captured) and step 4 says so.
+
+    approved_screen / executed_screen  the whole screenshots (spec 08 H2): their
+                     sha256 and the configured model ids are signed under
+                     `evidence`, and the PNGs are written next to the receipt
 
     Returns (receipt, path or None).
     """
@@ -86,9 +91,38 @@ def sign_order(policy, approval_event, approval_info, approved_crops, seed,
         signed_by="%s:%s" % (approval_info.get("method") or "approval", policy.owner),
         agent=agent,
         seed=seed,
+        evidence=evidence_of(approved_screen, None if status else executed_screen),
         **({"status": status, "blocked_at": blocked_at} if status else {}),
     )
-    return receipt, (write(receipt, approved_crops, executed_crops, run_dir) if run_dir else None)
+    path = write(receipt, approved_crops, executed_crops, run_dir) if run_dir else None
+    if run_dir:
+        write_screens(run_dir, approved_screen, None if status else executed_screen)
+    return receipt, path
+
+
+SCREEN_FILES = {"approved": "approved_screen.png", "executed": "executed_screen.png"}
+
+
+def evidence_of(approved_screen, executed_screen):
+    """Spec 08 H2: what the receipt signs besides the crops: the sha256 of each
+    whole screenshot (None when not captured) and the model ids configured for
+    this run. None when there is no screenshot at all (test doubles)."""
+    if not approved_screen and not executed_screen:
+        return None
+    s = config.settings()
+    return {
+        "screens": {"approved": sha_crop(approved_screen) if approved_screen else None,
+                    "executed": sha_crop(executed_screen) if executed_screen else None},
+        "models": {"agent": s.model_wonder, "reader": s.model_spark,
+                   "segmenter": s.model_sam, "voice": s.model_voice},
+    }
+
+
+def write_screens(run_dir, approved_screen, executed_screen):
+    out = Path(run_dir)
+    for side, data in (("approved", approved_screen), ("executed", executed_screen)):
+        if data:
+            (out / SCREEN_FILES[side]).write_bytes(data)
 
 
 def write(receipt, approved_crops, executed_crops, run_dir):

@@ -96,6 +96,9 @@ class ExplainTests(unittest.TestCase):
 
 
 class FakeMeta:
+    def start_run(self):
+        pass
+
     def spent_usd(self):
         return 0.0
 

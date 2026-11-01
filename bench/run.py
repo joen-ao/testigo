@@ -109,6 +109,7 @@ def one_run(meta, scenario, variant, mode, out_dir, max_steps, policy_path=None,
     agent = WonderAgent(meta)
     pixels = SamSparkChannel(meta)
     calls = time_pixels(pixels)
+    meta.start_run()                         # spec 08 H3: each configuration has its own cap
     spent0, t0 = meta.spent_usd(), time.perf_counter()
     started = clock.iso()
     row = {"scenario": scenario, "variant": variant, "mode": mode, "model": meta.model("wonder"),

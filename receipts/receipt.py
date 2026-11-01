@@ -145,7 +145,7 @@ def build(policy, action_text, amount_cents, address_text,
           approved_crops, executed_crops, approval, seed,
           receipt_id=None, time=None, agent="wonder@larkspur-market",
           signed_by=None, approved_read=None, executed_read=None,
-          executed_hashes=None, status=CONFIRMED, blocked_at=None):
+          executed_hashes=None, status=CONFIRMED, blocked_at=None, evidence=None):
     """Assemble and sign a receipt.
 
     approved_crops / executed_crops: {'amount': bytes, 'address': bytes};
@@ -172,6 +172,8 @@ def build(policy, action_text, amount_cents, address_text,
         "approval": approval,
         "signed_by": signed_by or "passkey:%s" % policy.owner,
     }
+    if evidence is not None:
+        receipt["evidence"] = evidence       # spec 08 H2: whole screenshots and model ids
     if status == BLOCKED:
         receipt["blocked_at"] = blocked_at
     else:
