@@ -138,6 +138,32 @@ class ChannelTests(unittest.TestCase):
         regions = SamSparkChannel(FakeMeta(boxes=False)).read_regions(self.cap())
         self.assertEqual(regions, [])
 
+    def test_tiles_and_button_overlap_the_full_read(self):
+        # Spec 07 M4: the tiles and the button search do not wait for the full
+        # read; the full read sees them already started.
+        import threading
+        started = {"tile": threading.Event(), "button": threading.Event()}
+        seen = {}
+
+        class Overlap(FakeMeta):
+            def chat(self, tool, messages, **kw):
+                prompt = messages[0]["content"][0]["text"]
+                if "part of a screenshot" in prompt:
+                    started["tile"].set()
+                elif "pixels wide" in prompt:
+                    seen["tile"] = started["tile"].wait(2)
+                    seen["button"] = started["button"].wait(2)
+                return FakeMeta.chat(self, tool, messages, **kw)
+
+            def segment(self, image, phrase):
+                if phrase == "confirm button":
+                    started["button"].set()
+                return FakeMeta.segment(self, image, phrase)
+
+        regions = SamSparkChannel(Overlap()).read_regions(self.cap())
+        self.assertEqual(seen, {"tile": True, "button": True})
+        self.assertEqual([r["label"] for r in regions], ["confirm button", "amount", "address"])
+
     def test_no_model_refuses(self):
         self.assertEqual(SamSparkChannel(None).read_regions(self.cap()), [])
 

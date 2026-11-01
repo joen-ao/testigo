@@ -19,6 +19,21 @@ from common import config
 from . import keys
 from .verify import MalformedReceipt, verify_receipt
 
+VERIFY_TIMEOUT_S = 20
+
+
+def run_verify(path, timeout=VERIFY_TIMEOUT_S):
+    """`testigo verify <path>` in a separate process, exactly as anyone would
+    run it: (output, exit code). Used by the interface and the MCP server."""
+    import subprocess
+    cmd = [sys.executable, "-m", "receipts.cli", "verify", str(path)]
+    try:
+        r = subprocess.run(cmd, cwd=config.ROOT, capture_output=True, text=True, timeout=timeout)
+        return r.stdout + r.stderr, r.returncode
+    except subprocess.TimeoutExpired:
+        return "verify timed out after %ds\n" % timeout, 124
+
+
 CHECK = "✓"   # ✓
 CROSS = "✗"   # ✗
 

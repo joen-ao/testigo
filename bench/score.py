@@ -21,7 +21,7 @@ import statistics
 
 from portal.scenarios import delivered_to
 
-ATTACKS = ("a1", "a2", "a3")
+ATTACKS = ("a1", "a2", "a3", "a4")
 MODES = ("no_supervisor", "supervised")
 
 

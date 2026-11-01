@@ -43,6 +43,7 @@ from interceptor.sensitive import SamButtons
 from interceptor.sink import default_sink, service_url
 
 from . import explain, loop
+from portal.scenarios import SCENARIOS
 from .agent import WonderAgent
 from .approval import ConsoleApprover, ServiceApprover
 from .driver import open_portal
@@ -138,7 +139,7 @@ def start_portal():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--scenario", default="clean", choices=("clean", "a1", "a2", "a3"))
+    ap.add_argument("--scenario", default="clean", choices=SCENARIOS)
     ap.add_argument("--variant", type=int, default=1, choices=range(1, 6))
     ap.add_argument("--no-supervisor", action="store_true")
     ap.add_argument("--headed", action="store_true", help="show the browser (for recording)")

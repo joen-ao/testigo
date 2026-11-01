@@ -218,6 +218,80 @@ class ServiceUITests(unittest.TestCase):
         self.assertEqual(self.c.post("/api/verify?path=clean/approved_amount.png").status_code, 404)
 
 
+    # -- spec 07 -----------------------------------------------------------------
+    def test_tampered_verify_fails_and_leaves_the_receipt_alone(self):
+        from receipts import keys
+        from tests.fixtures.bundles import build_bundle
+        build_bundle("clean", str(self.tmp / "clean"), seed=keys.generate_seed())
+        before = (self.tmp / "clean" / "receipt.json").read_bytes()
+        got = self.c.post("/api/verify/tampered?path=clean/receipt.json").json()
+        self.assertEqual(got["exit_code"], 1, got["output"])
+        self.assertIn("Signature invalid", got["output"])
+        self.assertIn("88 Mill Street", got["changed"]["to"])
+        self.assertNotIn("88 Mill Street", got["changed"]["from"])
+        self.assertNotIn(tempfile.gettempdir(), got["output"])
+        self.assertEqual((self.tmp / "clean" / "receipt.json").read_bytes(), before)
+        self.assertEqual(self.c.post("/api/verify?path=clean/receipt.json").json()["exit_code"], 0)
+        self.assertEqual(self.c.post("/api/verify/tampered?path=../policy/larkspur.policy.yaml").status_code, 404)
+
+    def test_history_lists_runs_newest_first_in_plain_words(self):
+        import json
+        def write(day, run, data, t):
+            d = self.tmp / day / run
+            d.mkdir(parents=True)
+            (d / "outcome.json").write_text(json.dumps(dict(data, run=run)))
+            os.utime(d / "outcome.json", (t, t))
+            return d
+        write("2026-11-01", "100000_a4_v1_sup", {"scenario": "a4", "variant": 1, "mode": "supervised",
+              "blocked": True, "checks": [{"status": "ok"}]}, 1_000)
+        d = write("2026-11-01", "110000_clean_v1_sup", {"scenario": "clean", "variant": 1, "mode": "supervised",
+                  "order": {"address": "120 Harbor Road, Unit 4, Riverton", "amount_cents": 124000},
+                  "receipt": {"comparison": {"status": "match"}}}, 3_000)
+        (d / "receipt.json").write_text("{}")
+        write("2026-11-01", "105000_a3_v2_nosup", {"scenario": "a3", "variant": 2, "mode": "no_supervisor",
+              "order": {"address": "88 Mill Street, Riverton", "amount_cents": 124000},
+              "attack_success": True}, 2_000)
+        (self.tmp / "bench").mkdir()                         # not a day folder: skipped
+        (self.tmp / "2026-11-01" / "broken").mkdir()
+        (self.tmp / "2026-11-01" / "broken" / "outcome.json").write_text("{not json")
+        runs = self.c.get("/api/history").json()["runs"]
+        self.assertEqual([r["id"] for r in runs], ["110000_clean_v1_sup", "105000_a3_v2_nosup", "100000_a4_v1_sup"])
+        self.assertEqual((runs[0]["result"], runs[0]["detail"], runs[0]["receipt"]),
+                         ("delivered", "to your warehouse", "2026-11-01/110000_clean_v1_sup/receipt.json"))
+        self.assertEqual((runs[1]["result"], runs[1]["detail"]), ("delivered", "to the attacker"))
+        self.assertEqual((runs[2]["result"], runs[2]["detail"]), ("blocked", "changed after approval"))
+
+    def test_rules_editor_signs_a_new_max_and_reset_restores(self):
+        from common import config
+        from receipts import keys
+        key = self.tmp / "owner.key"
+        keys.load_or_create_seed(key)
+        env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key)})
+        env.start()
+        self.addCleanup(env.stop)
+        active = config.active_policy_path()
+        self.addCleanup(lambda: active.unlink(missing_ok=True))
+        for bad in ({"max_per_order_usd": 0}, {"max_per_order_usd": 12.5}, {"max_per_order_usd": True}, {}):
+            self.assertEqual(self.c.post("/api/policy/edit", json=bad).status_code, 422, bad)
+        self.assertFalse(active.exists())
+        got = self.c.post("/api/policy/edit", json={"max_per_order_usd": 1000}).json()
+        self.assertEqual((got["status"], got["max_per_order_cents"], got["active"]), ("signed", 100000, "signed_here"))
+        self.assertEqual(got["deliver_only"][0]["name"], "Larkspur Market")
+        self.assertTrue(got["hash_ok"] and got["signed"])
+        self.assertEqual(self.c.get("/api/policy").json()["max_per_order_cents"], 100000)
+        sha = got["sha256"]
+        back = self.c.post("/api/policy/reset").json()
+        self.assertEqual((back["status"], back["active"], back["max_per_order_cents"]), ("reset", "committed", 150000))
+        self.assertFalse(active.exists())
+        self.assertTrue(config.archived_policy_path(sha).is_file())   # its receipts still verify
+
+    def test_rules_editor_needs_the_owner_key(self):
+        env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(self.tmp / "missing.key")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.assertEqual(self.c.post("/api/policy/edit", json={"max_per_order_usd": 900}).status_code, 409)
+
+
 # -- the page itself, in a headless browser ------------------------------------
 
 def _chromium():
@@ -823,11 +897,79 @@ class FlowPageTests(ChromiumCase):
         self.page.wait_for_selector("#runform")
         self.assertIn("#/demo/run", self.page.url)
 
+    # -- spec 07: history and the rules editor ----------------------------------
+    def test_history_page_lists_runs_and_verifies_a_receipt(self):
+        import json
+        from receipts import keys
+        from tests.fixtures.bundles import build_bundle
+        d = self.tmp / "2026-11-01" / "120000_clean_v1_sup"
+        build_bundle("clean", str(d), seed=keys.generate_seed())
+        (d / "outcome.json").write_text(json.dumps({
+            "run": d.name, "scenario": "clean", "variant": 1, "mode": "supervised",
+            "order": {"address": "120 Harbor Road, Unit 4, Riverton", "amount_cents": 124000},
+            "receipt": {"comparison": {"status": "match"}}}))
+        b = self.tmp / "2026-11-01" / "110000_a4_v2_sup"
+        b.mkdir(parents=True)
+        (b / "outcome.json").write_text(json.dumps({"run": b.name, "scenario": "a4", "variant": 2,
+                                                    "mode": "supervised", "blocked": True, "checks": []}))
+        self.open("#/history", ".rtable.history")
+        t = self.main()
+        for want in ("Past runs", "Normal order", "With TESTIGO+", "Delivered · to your warehouse",
+                     "Address swapped while the agent decides", "Blocked · changed after approval"):
+            self.assertIn(want.lower(), t.lower())
+        self.page.click("[data-receipt]")
+        self.page.wait_for_function("document.getElementById('hv-term') && /Signature valid/.test(document.getElementById('hv-term').innerText)")
+        self.assertEqual(self.page.get_attribute("#foot-history", "href"), "#/history")
+        self.open("#/history", ".rtable.history", width=375)
+        self.no_sideways_scroll()
+
+    def test_tamper_and_verify_from_the_result(self):
+        from tests.fixtures.fake_agent import run_fixture
+        out = run_fixture("clean", supervised=True, run_dir=self.tmp / "2026-11-01" / "130000_clean_v1_sup")
+        self.assertIsNotNone(out.receipt_path)
+        self.events(*out.events)
+        self.open("#/demo/result", "#tamperbtn")
+        self.page.click("#tamperbtn")
+        self.page.wait_for_selector("#verify-res")
+        t = self.page.inner_text("#verify-res")
+        self.assertIn("Caught", t)
+        self.assertIn("88 Mill Street", t)
+        self.page.click("#verifybtn")
+        self.page.wait_for_function("(document.getElementById('verify-res') || {}).innerText && /Valid: the signature/.test(document.getElementById('verify-res').innerText)")
+
+    def test_rules_editor_in_step_1(self):
+        from common import config
+        from receipts import keys
+        key = self.tmp / "owner.key"
+        keys.load_or_create_seed(key)
+        env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key)})
+        env.start()
+        self.addCleanup(env.stop)
+        active = config.active_policy_path()
+        self.addCleanup(lambda: active.unlink(missing_ok=True))
+        self.open("#/demo/rules", "#editrules")
+        self.assertEqual(self.page.locator("#resetrules").count(), 0)
+        self.page.click("#editrules")
+        self.page.fill("#maxusd", "0")
+        self.page.click("#signrules")
+        self.page.wait_for_selector(".rule-form .callout")
+        self.assertFalse(active.exists())
+        self.page.fill("#maxusd", "1000")
+        self.page.click("#signrules")
+        self.page.wait_for_selector("#resetrules")
+        self.assertIn("USD 1,000.00", self.page.inner_text(".policy-doc"))
+        self.assertTrue(active.is_file())
+        self.page.click("#resetrules")
+        self.page.wait_for_function("!document.getElementById('resetrules')")
+        self.assertIn("USD 1,500.00", self.page.inner_text(".policy-doc"))
+        self.assertFalse(active.exists())
+
     # -- step 2 -> 3 --------------------------------------------------------
     def test_step_2_starts_a_run_and_step_3_watches_it(self):
         self.open("#/demo/run", "#runform")
-        self.assertEqual(self.page.locator("input[name=situation]").count(), 4)
-        self.assertEqual(self.page.locator(".pick .thumb .specimen").count(), 4)    # threat thumbnails
+        self.assertEqual(self.page.locator("input[name=situation]").count(), 5)
+        self.assertEqual(self.page.locator(".pick .thumb .specimen").count(), 5)    # threat thumbnails
+        self.assertIn("Address swapped while the agent decides", self.main())     # A4 (spec 07 M3)
         self.assertTrue(self.page.is_checked("#protect"))
         self.assertEqual(self.page.locator(".protect.on").count(), 1)
         self.page.check("input[name=situation][value=a2]")
@@ -843,6 +985,8 @@ class FlowPageTests(ChromiumCase):
         t = self.main()
         self.assertIn("Checking the screen first", t)
         self.assertIn("Stopped: the screen shows an instruction that is not in the page code", t)
+        who = self.page.locator(".plainlog .who").all_inner_texts()               # spec 07 M5
+        self.assertIn("Spark + SAM 3.1", who)
         self.assertIn("Blocked", self.page.inner_text("#announce"))
         self.page.click("#seeresult")
         self.page.wait_for_selector(".outcome-card")

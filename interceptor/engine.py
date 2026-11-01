@@ -53,6 +53,7 @@ class Interceptor:
         self.policy = policy
         self.pixels = pixel_channel
         self.confidence_min = confidence_min
+        self.last_regions = []     # the regions of the last read (the loop compares them at the click)
 
     # -- pre-action ---------------------------------------------------------
 
@@ -60,6 +61,7 @@ class Interceptor:
         """Decide on a proposed action. `action` is {"kind": "confirm"|"click"|"type", ...}."""
         t0 = time.perf_counter()
         regions = self.pixels.read_regions(capture)
+        self.last_regions = regions
         by_label = {r["label"]: r for r in regions}
         measured = int(round((time.perf_counter() - t0) * 1000))
         lat = latency_ms if latency_ms is not None else measured
@@ -157,7 +159,8 @@ class Interceptor:
         unchanged content never hash the same across two real captures. The
         hashes travel along as evidence. Returns (verify.result event, read)."""
         from receipts.receipt import norm_read
-        by = {r["label"]: r for r in self.pixels.read_regions(capture)}
+        self.last_regions = self.pixels.read_regions(capture)
+        by = {r["label"]: r for r in self.last_regions}
         read = {n: by[n]["text"] for n in ("amount", "address")
                 if n in by and by[n].get("confidence", 0) >= self.confidence_min}
         executed = {n: sha_crop(capture.crops[n]) for n in ("amount", "address")

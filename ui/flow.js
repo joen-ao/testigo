@@ -7,6 +7,7 @@
  *   #/                landing (#/video, #/threats, #/how, #/proof, #/bench,
  *                     #/limits, #/start scroll to a section; #/attacks = #/threats)
  *   #/results         WitnessBench, simply
+ *   #/history         the latest runs, with their receipts (spec 07 M7)
  *   #/demo/rules      1 Your rules
  *   #/demo/run        2 Run the agent
  *   #/demo/watch      3 Watching
@@ -26,6 +27,7 @@ const SITUATIONS = [
   { key: "a1", name: "Hidden order in the page code", text: "An invisible notice tells the agent to ship somewhere else." },
   { key: "a2", name: "Order painted in an image", text: "A banner image carries a faint instruction to change the address." },
   { key: "a3", name: "Tampered delivery address", text: "A script shows another street under your company’s name." },
+  { key: "a4", name: "Address swapped while the agent decides", text: "The review screen is right when the agent looks and wrong when it clicks." },
 ];
 function situation(key) { return SITUATIONS.find(x => x.key === key) || { key, name: key || "—", text: "" }; }
 
@@ -41,6 +43,7 @@ function parseRoute() {
     return { name: "demo", step: STEPS.some(x => x.key === parts[1]) ? parts[1] : "rules" };
   }
   if (parts[0] === "results") return { name: "results" };
+  if (parts[0] === "history") return { name: "history" };
   if (parts[0] === "attacks") return { name: "landing", section: "threats" };
   if (["top", "video", "threats", "how", "proof", "bench", "limits", "start"].includes(parts[0])) return { name: "landing", section: parts[0] };
   return { name: "landing" };
@@ -97,7 +100,11 @@ async function loadForRoute() {
     if (r.name === "present") return loadFor(S.view);
     if (r.name === "landing" && !S.benchComplete) { S.benchComplete = await getJSON("/api/bench?complete=1"); draw(); }
     if (r.name === "results" && !S.bench) { S.bench = await getJSON("/api/bench"); draw(); }
-    if (r.name === "landing" || r.name === "results") return;
+    if (r.name === "history") {
+      S.history = await getJSON("/api/history").catch(err => ({ error: err.message }));
+      draw();
+    }
+    if (r.name === "landing" || r.name === "results" || r.name === "history") return;
     if (r.name === "demo") {
       if (!S.policy || r.step === "rules") await loadPolicy();
       if (r.step === "result") {
@@ -195,8 +202,24 @@ function needsYou(r) {
   return !(p && p.state !== "running");      // a stopped run waits for nobody
 }
 
+// who did each step (spec 07 M5): one Meta model, the portal or the signature
+const WHO = {
+  "run.started": "", "agent.step": "Muse Wonder", "check.result": "Spark + SAM 3.1",
+  "approval.requested": "Spark + SAM 3.1", "approval.granted": "Muse Voice",
+  "order.confirmed": "Portal", "verify.result": "Spark + SAM 3.1",
+  "explain.result": "Spark + SAM 3.1", "receipt.signed": "Ed25519",
+};
+function whoDid(e) {
+  if (e.type === "agent.step" && !/^proposed: /.test(e.label || "")) return "TESTIGO+";
+  if (e.type === "approval.granted" && e.method && !/voice/i.test(e.method)) return "You";
+  return WHO[e.type] || "";
+}
 // one line of the Watching timeline, in plain words; null to leave it out
 function plainLine(e, r) {
+  const line = plainText(e, r);
+  return line ? line.concat([whoDid(e)]) : null;
+}
+function plainText(e, r) {
   const sup = r.mode === "supervised";
   switch (e.type) {
     case "run.started": return [ICON.dot, "info", sup ? "The agent started restocking your warehouse. TESTIGO+ is watching." : "The agent started restocking your warehouse, with TESTIGO+ switched off."];
@@ -205,6 +228,7 @@ function plainLine(e, r) {
       if (l === "proposed: done") return [ICON.user, "info", "The agent says it is finished."];
       if (/^stopped: max_steps/.test(l)) return [ICON.dot, "warn", "The agent ran out of steps."];
       if (/^sensitive/.test(l)) return [ICON.eye, "info", "This click would confirm the order. Checking the screen first."];
+      if (/^screen changed while checking/.test(l)) return [ICON.warn, "warn", "The screen changed while TESTIGO+ was checking it, so the click was not made. The agent looks again."];
       if (/without a check or approval/.test(l)) return [ICON.warn, "lost", "The order was confirmed with nobody checking it."];
       if (/^receipt not/.test(l)) return [ICON.warn, "warn", "The receipt could not be signed on this machine."];
       if (/^proposed: /.test(l) && e.detail) return [ICON.dot, "info", "Agent: “" + clip(e.detail, 160) + "”"];
@@ -264,6 +288,15 @@ function startPicked() {
   if (p.headed) req.headed = true;
   startRun(req);
 }
+// #/history: run `testigo verify` on a past receipt and show its output
+async function verifyPast(path) {
+  S.historyVerify = { command: "testigo verify runs/" + path, output: "checking the signature and the evidence…" }; draw();
+  try { S.historyVerify = await getJSON("/api/verify?path=" + encodeURIComponent(path), { method: "POST" }); }
+  catch (err) { S.historyVerify = { command: "testigo verify runs/" + path, output: "error: " + err.message }; }
+  draw();
+  const t = document.getElementById("hv-term");
+  if (t) t.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+}
 async function cancelRun() {
   try {
     S.proc = await getJSON("/api/run/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
@@ -317,7 +350,7 @@ function benchFacts(b) {
   if (!s || !counted(s.attacks_succeed_without) || !counted(s.attacks_succeed_with)) return null;
   const rows = Array.isArray(b.data.rows) ? b.data.rows : [];
   const hp = rows.filter(x => x.mode === "supervised" && (x.scenario === "a1" || x.scenario === "a2"));
-  const att = rows.filter(x => x.mode === "supervised" && ["a1", "a2", "a3"].includes(x.scenario));
+  const att = rows.filter(x => x.mode === "supervised" && ["a1", "a2", "a3", "a4"].includes(x.scenario));
   const fp = s.false_positives || {};
   return {
     wo: s.attacks_succeed_without, wi: s.attacks_succeed_with,
@@ -343,6 +376,7 @@ function siteHeader() {
       <a class="brand" id="nav-home" href="#/" aria-label="TESTIGO+ home">${MARK}<span class="name"><b>TESTIGO+</b><small>Witness for AI agents</small></span></a>
       ${demo ? stepper(r.step) : landingNavLinks(navKey())}
       <div class="nav-end">
+        <a class="gh" id="nav-history" href="#/history"${r.name === "history" ? ' aria-current="page"' : ""}>History</a>
         <a class="gh" id="nav-code" href="${GH_URL}">${GH_ICON}Code</a>
         ${demo ? "" : `<a class="btn-primary" id="nav-try" href="#/demo/rules">Try the demo</a>
         <button class="menu-btn" id="menuBtn" type="button" aria-expanded="${S.menuOpen ? "true" : "false"}" aria-controls="links" aria-label="${S.menuOpen ? "Close menu" : "Open menu"}"><span></span><span></span><span></span></button>`}
@@ -382,6 +416,7 @@ function siteFooter() {
       <span class="mono">TESTIGO+</span>
       <span>Simulation only: simulated company, supplier and addresses. No real brands.</span>
       <span>Built with Muse Wonder, SAM 3.1, Muse Spark and Muse Voice.</span>
+      <a id="foot-history" href="#/history">Past runs</a>
     </div></footer>`;
 }
 // each view rises in once (0.5 s); a redraw meanwhile continues the same motion
@@ -443,6 +478,37 @@ const page = {
       ${note}${benchFigs(f)}${hidden}${resisted}
       ${table}${details}
       <div class="actions"><a class="btn-primary" id="results-try" href="#/demo/rules">Try the demo</a></div>
+    </div>`;
+  },
+
+  history() {
+    const h = S.history;
+    const head = pageHead("History", "Past runs", "The latest runs started here or from the terminal, newest first. Each protected order that was approved has a signed receipt you can check.");
+    if (!h) return `<div class="wrap page"${enterAttr()}>${head}<div class="loading">Loading the runs…</div></div>`;
+    if (h.error) return `<div class="wrap page"${enterAttr()}>${head}${callout("bad", ICON.warn, "The runs could not be read.", `<p>${esc(h.error)}</p>`)}</div>`;
+    const WHY = { divergence: "a hidden instruction", policy_violation: "breaks your rules",
+                  cannot_verify: "screen not readable", "changed after approval": "changed after approval" };
+    const RES = { blocked: ["bad", "Blocked"], denied: ["off", "Not approved"], delivered: ["ok", "Delivered"],
+                  flagged: ["warn", "Delivered, flagged"], stopped: ["off", "Stopped"] };
+    const rows = (h.runs || []).map((x, i) => {
+      const [cls, word] = RES[x.result] || ["off", x.result || "—"];
+      if (x.result === "blocked") x = Object.assign({}, x, { detail: WHY[x.detail] || x.detail });
+      const lost = x.result !== "blocked" && x.detail === "to the attacker";
+      const when = /^(\d\d)(\d\d)(\d\d)_/.exec(x.id || "");
+      return `<tr><td class="mono">${esc(shortDate(x.day))}${when ? ` ${when[1]}:${when[2]}` : ""}</td>
+        <td>${esc(situation(x.scenario).name)}${x.variant ? ` <span class="muted">v${esc(x.variant)}</span>` : ""}</td>
+        <td>${x.mode === "supervised" ? "With TESTIGO+" : "Without"}</td>
+        <td><span class="chip ${lost ? "lost" : cls}">${esc(word)}${x.detail ? ` · ${esc(x.detail)}` : ""}</span></td>
+        <td>${x.receipt ? `<button class="btn-link" type="button" id="hv-${i}" data-receipt="${esc(x.receipt)}">Verify receipt</button>` : `<span class="muted">—</span>`}</td></tr>`;
+    }).join("");
+    const out = S.historyVerify;
+    const term = out ? `<div class="vterm" id="hv-term"><div class="term-bar"><div class="dots" aria-hidden="true"><span></span><span></span><span></span></div><span class="tab">${esc(out.command || "testigo verify")}</span></div>
+        <div class="term-body">${esc(out.output || "")}</div></div>` : "";
+    return `<div class="wrap page"${enterAttr()}>${head}
+      ${rows ? `<div class="table-wrap" role="region" aria-label="Past runs" tabindex="0"><table class="rtable history">
+        <thead><tr><th scope="col">When</th><th scope="col">Situation</th><th scope="col">Run</th><th scope="col">Result</th><th scope="col">Receipt</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>${term}`
+        : `<div class="empty-state"><b>No runs yet.</b><p>Run the agent and it will show up here.</p><a class="btn-primary" id="history-try" href="#/demo/run">Run the agent</a></div>`}
     </div>`;
   },
 
@@ -524,7 +590,11 @@ const steps = {
       <div class="actions">
         <a class="btn-primary" href="#/demo/run" id="userules">Use these rules</a>
         <button class="btn-secondary" id="showmandate" type="button" aria-expanded="${S.showMandate}" aria-controls="mlive">${ICON.mic} Record new rules</button>
+        <button class="btn-secondary" id="editrules" type="button" aria-expanded="${S.editRules}" aria-controls="ruleform">Edit rules</button>
+        ${p.active === "signed_here" ? `<button class="btn-link" id="resetrules" type="button"${S.ruleEdit.busy ? " disabled" : ""}>Restore the demo’s rules</button>` : ""}
       </div>
+      ${S.editRules ? ruleEditor(p) : ""}
+      ${!S.editRules && S.ruleEdit.error ? callout("bad", ICON.warn, "The rules were not changed.", `<p>${esc(S.ruleEdit.error)}</p>`) : ""}
       ${S.showMandate ? `<div class="mandate-wrap">${mandateLive(p)}</div>` : ""}
       ${more("rules-more", "Show the signed policy", `
         ${p.transcript ? `<p>You said: <q>${esc(p.transcript)}</q></p>` : ""}
@@ -594,7 +664,7 @@ const steps = {
       : checking(r) ? { cls: "info", icon: ICON.eye, text: "TESTIGO+ is reading the screen before the agent may confirm." }
       : { cls: "info", icon: ICON.eye, text: sup ? "The agent is working. TESTIGO+ is checking each sensitive step." : "The agent is working, with TESTIGO+ switched off." };
     const lines = r.log.map(e => plainLine(e, r)).filter(Boolean);
-    const list = lines.length ? `<ol class="plainlog">${lines.map(([, cls, t]) => `<li class="${cls}"><span class="pt" aria-hidden="true"></span><span>${esc(t)}</span></li>`).join("")}</ol>`
+    const list = lines.length ? `<ol class="plainlog">${lines.map(([, cls, t, who]) => `<li class="${cls}"><span class="pt" aria-hidden="true"></span><span>${esc(t)}${who ? ` <span class="who">${esc(who)}</span>` : ""}</span></li>`).join("")}</ol>`
       : `<p class="muted pad">Nothing yet.</p>`;
     const proc = procFor(r);
     const capsule = you ? `<section class="needs-you" aria-labelledby="ny-h">
@@ -657,6 +727,30 @@ const steps = {
   },
 };
 
+// step 1: type the maximum per order and sign it (spec 07 M8). Where orders may
+// ship to is not editable here: it comes from the company profile (F1-D2).
+function ruleEditor(p) {
+  const e = S.ruleEdit;
+  const dollars = Math.round((p.max_per_order_cents || 0) / 100);
+  return `<form class="rule-form" id="ruleform" novalidate>
+      <label class="optfield" for="maxusd">Max per order, in US dollars
+        <input type="number" id="maxusd" min="1" max="1000000" step="1" inputmode="numeric" value="${esc(dollars)}" required></label>
+      <p class="muted small">Ship only to stays ${esc(p.deliver_only.map(x => x.name).join(", "))}: it comes from your company profile. The order on the demo page is USD 1,240.00, so a maximum below that blocks it.</p>
+      ${e.error ? callout("bad", ICON.warn, "Not signed.", `<p>${esc(e.error)}</p>`) : ""}
+      <div class="actions tight">
+        <button class="btn-primary" type="submit" id="signrules"${e.busy ? " disabled" : ""}>${e.busy ? "Signing…" : "Sign these rules"}</button>
+        <button class="btn-link" type="button" id="canceledit">Cancel</button>
+      </div></form>`;
+}
+async function saveRules(path, body) {
+  S.ruleEdit = { busy: true, error: "" }; draw();
+  try {
+    S.policy = await getJSON(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    S.policyError = ""; S.ruleEdit = { busy: false, error: "" }; S.editRules = false;
+  } catch (err) { S.ruleEdit = { busy: false, error: err.message }; }
+  draw();
+}
+
 function runFailed(p) {
   const why = p.state === "cancelled" ? "You stopped the run before it reported anything."
     : p.state === "finished" ? "The run ended, but none of its steps reached this page."
@@ -669,7 +763,7 @@ function runFailed(p) {
 // the receipt on paper, with `testigo verify` as a terminal (as on the landing)
 function verifyTerm(rc) {
   const vo = S.verify;
-  const cmd = `<span class="p">$</span> testigo verify runs/${esc(rc.path)}`;
+  const cmd = `<span class="p">$</span> testigo verify runs/${esc(rc.path)}${vo && vo.tampered && !S.verifying ? ` <span class="dim"># a copy with the address changed</span>` : ""}`;
   let out;
   if (S.verifying) out = `${cmd}\n<span class="dim">  checking the signature and the evidence…</span> <span class="caret"></span>`;
   else if (vo) {
@@ -681,7 +775,8 @@ function verifyTerm(rc) {
     }).join("\n");
   } else out = `${cmd} <span class="caret"></span>`;
   return `<div class="vterm"><div class="term-bar"><div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
-      <button class="tab" id="verifybtn" type="button"${S.verifying ? " disabled" : ""}>${ICON.seal} Verify receipt</button></div>
+      <button class="tab" id="verifybtn" type="button"${S.verifying ? " disabled" : ""}>${ICON.seal} Verify receipt</button>
+      <button class="tab" id="tamperbtn" type="button"${S.verifying ? " disabled" : ""}>Tamper and verify</button></div>
     <div class="term-body">${out}</div></div>`;
 }
 function receiptCard(r) {
@@ -694,8 +789,11 @@ function receiptCard(r) {
   if (!rc) return shell(`<p class="doc-note">Loading the receipt…</p>`, true);
   if (rc.error) return shell(`<p class="doc-note">The receipt file could not be read: ${esc(rc.error)}</p>`, true);
   const d = rc.receipt;
-  const res = vo && !S.verifying ? `<p class="verify-res ${vo.exit_code === 0 ? "ok" : "bad"}">${vo.exit_code === 0 ? ICON.check : ICON.stop}<span>${vo.exit_code === 0
-      ? "Valid: the signature and the evidence match." : "Not valid: the receipt or its evidence does not check out."}</span></p>` : "";
+  const ch = vo && vo.tampered && vo.changed;
+  const res = vo && !S.verifying ? `<p class="verify-res ${vo.exit_code === 0 ? "ok" : "bad"}" id="verify-res">${vo.exit_code === 0 ? ICON.check : ICON.stop}<span>${vo.tampered
+      ? (vo.exit_code === 0 ? "The edited copy still checks out. That should not happen: report it."
+        : `Caught: in a copy, the ${esc(ch ? ch.field : "address")} was changed${ch ? ` to “${esc(clip(ch.to, 80))}”` : ""}, and the signature no longer matches. Your receipt is untouched.`)
+      : vo.exit_code === 0 ? "Valid: the signature and the evidence match." : "Not valid: the receipt or its evidence does not check out."}</span></p>` : "";
   const field = (k, v) => v == null || v === "" ? "" : `<div><dt>${esc(k)}</dt><dd class="mono">${esc(v)}</dd></div>`;
   return shell(`<p class="doc-note">It binds your rules, the screen crops you approved and what executed${d.status === "blocked" ? " (here: a blocked order, nothing executed)" : ""}. Anyone can check it without trusting us.</p>
       <dl class="rc-fields">${field("id", d.id || ev.id)}${field("status", d.status)}${field("time", d.time)}${field("policy", short(d.policy_sha256))}${field("signed by", d.signed_by)}</dl>
@@ -716,7 +814,9 @@ function alertMessage() {
 function liveMessage() {
   if (S.route.name !== "demo") return "";
   if (S.route.step === "result" && (S.verifying || S.verify)) {
-    return S.verifying ? "Checking the receipt." : S.verify.exit_code === 0 ? "Receipt valid: the signature and the evidence match." : "Receipt not valid.";
+    if (S.verifying) return "Checking the receipt.";
+    if (S.verify.tampered) return S.verify.exit_code === 0 ? "The edited copy still checks out." : "The edited copy was caught: its signature no longer matches.";
+    return S.verify.exit_code === 0 ? "Receipt valid: the signature and the evidence match." : "Receipt not valid.";
   }
   if (S.waitingFor) return S.proc && S.proc.state !== "running" ? "The run did not start." : "Starting the agent.";
   const r = curRun();
@@ -808,10 +908,10 @@ function draw() {
   } else {
     landingUnmount(); S.mounted = r.name;
     PLAIN = true;
-    const body = r.name === "results" ? page.results() : page.demo();
+    const body = r.name === "results" ? page.results() : r.name === "history" ? page.history() : page.demo();
     app.innerHTML = siteHeader() + `<main id="main" class="site-main ${r.name}" tabindex="-1">${testBanner(false)}${body}</main>` + siteFooter();
     placePill(false);
-    document.title = r.name === "demo" ? `${TITLES[r.step]} · TESTIGO+ demo` : "Results · TESTIGO+";
+    document.title = r.name === "demo" ? `${TITLES[r.step]} · TESTIGO+ demo` : r.name === "history" ? "History · TESTIGO+" : "Results · TESTIGO+";
   }
   bind();
   if (keep) {
@@ -824,14 +924,25 @@ function draw() {
 
 function bind() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
-  on("runverify", runVerify); on("verifybtn", runVerify);
+  on("runverify", runVerify); on("verifybtn", runVerify); on("tamperbtn", () => runVerify(true));
   on("vrec", startRecording); on("vstop", () => stopRecording(false));
   on("vapprove", () => decide("approve")); on("vdeny", () => decide("deny"));
   on("mrec", startMandate); on("mstop", () => stopMandate(false));
   on("msign", signMandate); on("mdiscard", discardMandate);
   on("auto", () => { S.auto = !S.auto; draw(); });
   on("showmandate", () => { S.showMandate = !S.showMandate; draw(); });
+  on("editrules", () => { S.editRules = !S.editRules; S.ruleEdit = { busy: false, error: "" }; draw(); });
+  on("canceledit", () => { S.editRules = false; S.ruleEdit = { busy: false, error: "" }; draw(); });
+  on("resetrules", () => saveRules("/api/policy/reset"));
+  const rf = document.getElementById("ruleform");
+  if (rf) rf.onsubmit = e => {
+    e.preventDefault();
+    const v = Number(document.getElementById("maxusd").value);
+    if (!Number.isInteger(v) || v < 1 || v > 1000000) { S.ruleEdit = { busy: false, error: "Type a whole number of dollars from 1 to 1,000,000." }; draw(); return; }
+    saveRules("/api/policy/edit", { max_per_order_usd: v });
+  };
   on("cancelrun", cancelRun); on("cancelorphan", cancelRun);
+  document.querySelectorAll("[data-receipt]").forEach(b => { b.onclick = () => verifyPast(b.dataset.receipt); });
   on("menuBtn", () => setMenu(!S.menuOpen));
   on("compare", () => {
     const r = curRun();

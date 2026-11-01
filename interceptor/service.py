@@ -617,15 +617,169 @@ def api_receipt(path: str = ""):
 def api_verify(request: Request, path: str = ""):
     """Run the real CLI, exactly as anyone would, and return its output."""
     local_only(request)
+    from receipts.cli import run_verify
     p = receipt_path(path)
-    cmd = [sys.executable, "-m", "receipts.cli", "verify", str(p)]
-    try:
-        r = subprocess.run(cmd, cwd=config.ROOT, capture_output=True, text=True,
-                           timeout=VERIFY_TIMEOUT_S)
-        out, code = r.stdout + r.stderr, r.returncode
-    except subprocess.TimeoutExpired:
-        out, code = "verify timed out after %ds\n" % VERIFY_TIMEOUT_S, 124
+    out, code = run_verify(p, VERIFY_TIMEOUT_S)
     return {"command": "testigo verify %s" % _rel(p), "output": out, "exit_code": code}
+
+
+
+
+def tampered_copy(src, dest_dir):
+    """Spec 07 M6: copy a receipt and its crop files into `dest_dir` and change
+    the approved delivery address in the copy, as someone editing the file
+    would. Returns (receipt path, field, before, after). The original is
+    only read."""
+    import shutil
+    from common.address import ADDRESS_RE
+    from portal.scenarios import ATTACKER_ADDRESS
+    data = json.loads(src.read_text(encoding="utf-8"))
+    field = "address" if isinstance(data.get("address"), str) else "action"
+    before = str(data.get(field) or "")
+    street = ATTACKER_ADDRESS.split(",")[0]
+    m = ADDRESS_RE.search(before)
+    after = before[:m.start()] + street + before[m.end():] if m else before
+    if after == before:
+        after = before + " · " + ATTACKER_ADDRESS
+    data[field] = after
+    for f in src.parent.iterdir():
+        if f.is_file() and re.fullmatch(r"(approved|executed)_[a-z]+\.png", f.name):
+            shutil.copyfile(f, dest_dir / f.name)
+    out = dest_dir / "receipt.json"
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out, field, before, after
+
+
+@app.post("/api/verify/tampered")
+def api_verify_tampered(request: Request, path: str = ""):
+    """Spec 07 M6: the same `testigo verify`, on a copy of the receipt whose
+    approved address was changed. Shows what an edited receipt looks like to
+    anyone checking it. The receipt itself is never touched."""
+    local_only(request)
+    p = receipt_path(path)
+    with tempfile.TemporaryDirectory(prefix="testigo-tampered-") as tmp:
+        from receipts.cli import run_verify
+        copy, field, before, after = tampered_copy(p, Path(tmp))
+        out, code = run_verify(copy, VERIFY_TIMEOUT_S)
+        out = out.replace(str(copy), "tampered copy of %s" % _rel(p)).replace(tmp, "tampered copy")
+    return {"command": "testigo verify %s  (tampered copy)" % _rel(p), "output": out,
+            "exit_code": code, "changed": {"field": field, "from": before, "to": after}}
+
+
+# -- history (spec 07 M7) -----------------------------------------------------
+
+HISTORY_LIMIT = 30
+_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def history_row(run_dir, data):
+    """One past run in plain fields, from its outcome.json (agent.run)."""
+    order = data.get("order") or {}
+    checks = data.get("checks") or []
+    receipt = data.get("receipt") or {}
+    comparison = (receipt.get("comparison") or {}).get("status")
+    if data.get("blocked"):
+        result = "blocked"
+        # the last pre-click check said why; if it passed, the review re-read
+        # (F8) blocked: the order changed after the person approved it
+        last = checks[-1].get("status") if checks else ""
+        detail = last if last and last != "ok" else "changed after approval"
+    elif data.get("denied"):
+        result, detail = "denied", ""
+    elif order:
+        to = "attacker" if data.get("attack_success") or _to_attacker(order) else "buyer"
+        result = "flagged" if comparison and comparison != "match" else "delivered"
+        detail = "to the attacker" if to == "attacker" else "to your warehouse"
+    elif data.get("max_steps"):
+        result, detail = "stopped", "ran out of steps"
+    else:
+        result, detail = "stopped", "ended without an order"
+    rpath = run_dir / "receipt.json"
+    return {"id": data.get("run") or run_dir.name, "day": run_dir.parent.name,
+            "scenario": data.get("scenario"), "variant": data.get("variant"),
+            "mode": data.get("mode"), "result": result, "detail": detail,
+            "address": order.get("address"), "amount_cents": order.get("amount_cents"),
+            "receipt": rpath.relative_to(runs_dir()).as_posix() if rpath.is_file() else None,
+            "spent_usd": data.get("spent_usd")}
+
+
+def _to_attacker(order):
+    from portal.scenarios import delivered_to
+    return delivered_to(order) == "attacker"
+
+
+@app.get("/api/history")
+def api_history():
+    """Spec 07 M7: the latest runs started from the interface or the terminal
+    (runs/<day>/<run>/outcome.json), newest first."""
+    base = runs_dir()
+    found = []
+    for day in base.iterdir() if base.is_dir() else []:
+        if not (day.is_dir() and _DAY_RE.match(day.name)):
+            continue
+        for run in day.iterdir():
+            f = run / "outcome.json"
+            if f.is_file():
+                found.append((f.stat().st_mtime, run, f))
+    rows = []
+    for _, run, f in sorted(found, key=lambda x: x[0], reverse=True)[:HISTORY_LIMIT]:
+        try:
+            rows.append(history_row(run, json.loads(f.read_text(encoding="utf-8"))))
+        except (OSError, ValueError, AttributeError):
+            continue                       # a half-written or odd file is skipped
+    return {"runs": rows, "limit": HISTORY_LIMIT}
+
+
+# -- rules editor (spec 07 M8) -------------------------------------------------
+
+MAX_EDIT_USD = 1_000_000
+
+
+@app.post("/api/policy/edit")
+async def policy_edit(request: Request):
+    """{"max_per_order_usd": int} -> the active policy with that maximum,
+    signed with the owner key. Everything else is kept from the active policy:
+    the places orders may ship to come from the company profile (F1-D2) and the
+    page never names one."""
+    from policy.compile import build_policy_dict, sign_policy_dict
+    from receipts import keys
+    local_only(request)
+    body = await json_body(request, MAX_JSON_BYTES)
+    usd_max = body.get("max_per_order_usd")
+    if not isinstance(usd_max, int) or isinstance(usd_max, bool) or not 1 <= usd_max <= MAX_EDIT_USD:
+        raise HTTPException(422, "max_per_order_usd must be a whole number of dollars from 1 to %d" % MAX_EDIT_USD)
+    try:
+        current = load_policy(config.policy_path())
+    except config.PolicyNotTrusted as e:
+        raise HTTPException(409, "the active policy is not trusted: %s" % e)
+    if not current.deliver_only:
+        raise HTTPException(409, "the active policy names no place to ship to")
+    key_path = config.settings().signing_key_path
+    if not key_path.is_file():
+        raise HTTPException(409, "the owner key is not on this machine (run: testigo keygen)")
+    pol = build_policy_dict("", current.deliver_only, usd_max * 100, current.ask_before,
+                            owner=current.owner or "larkspur", source="typed",
+                            signed_by=current.signed_by or None)
+    signed, _ = sign_policy_dict(pol, keys.load_seed(key_path))
+    dest = await run_in_threadpool(write_active_policy, signed)
+    return dict(policy_view(load_policy(dest), dest), status="signed")
+
+
+@app.post("/api/policy/reset")
+def policy_reset(request: Request):
+    """Back to the demo's committed rules: the rules signed here stop being
+    active. They stay archived by hash, so their receipts still verify."""
+    local_only(request)
+    active = config.active_policy_path()
+    if active.is_file():
+        try:
+            # kept by hash whether or not it can be trusted here: a receipt that
+            # names it is checked for trust when it is read back
+            config.archive_policy(active)
+        except (OSError, ValueError):
+            pass
+        active.unlink()
+    return dict(policy_view(load_policy(config.POLICY_PATH), config.POLICY_PATH), status="reset")
 
 
 RESULTS_DIR = config.ROOT / "results"
@@ -684,7 +838,7 @@ def api_bench(complete: bool = False):
 # shell. Its events reach the page the usual way (POST /events, then /ws); this
 # only reports whether the process is alive and the last lines it printed.
 
-RUN_SCENARIOS = ("clean", "a1", "a2", "a3")
+RUN_SCENARIOS = ("clean", "a1", "a2", "a3", "a4")
 RUN_KEYS = {"scenario", "variant", "supervised", "explain", "headed"}
 RUN_TAIL_LINES = 40
 RUN_STOP_TIMEOUT_S = 5

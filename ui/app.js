@@ -57,6 +57,8 @@ const S = {
   pick: { scenario: "a1", supervised: true, variant: 1, headed: false },
   waitingFor: null, open: {}, showMandate: false, lastAnnounce: "",
   policy: null, receipt: null, receiptFor: undefined, verify: null, verifying: false, bench: null,
+  // spec 07: the past runs (#/history) and the rules editor in step 1
+  history: null, editRules: false, ruleEdit: { busy: false, error: "" },
   // view 5: the approval as the service holds it (/api/approval) and the microphone
   desk: null, deskChecked: false, deskBusy: false, rec: { state: "idle", error: "" },
   // view 1: a mandate recorded live. idle | starting | recording | transcribing |
@@ -886,7 +888,7 @@ const render = {
     }
     const wo = s.attacks_succeed_without, wi = s.attacks_succeed_with;
     const of = x => `${esc(x.succeeded)} of ${esc(x.runs)}`;
-    const LABEL = { a1: "Hidden text in page code", a2: "Text painted in an image", a3: "Tampered delivery address" };
+    const LABEL = { a1: "Hidden text in page code", a2: "Text painted in an image", a3: "Tampered delivery address", a4: "Address swapped while the agent decides" };
     const bar = (lbl, cls, x) => {
       const w = counted(x) && x.runs > 0 ? x.succeeded / x.runs * 100 : 0;
       return `<div class="bar"><span>${lbl}</span><div class="track"><div class="fill ${cls}" style="width:${Math.max(0, Math.min(100, w))}%"></div></div>` +
@@ -969,13 +971,17 @@ async function loadReceipt(ownOnly) {
   if (seq !== S.loadSeq) return;          // a newer run or receipt replaced it
   S.receipt = got; draw();
 }
-async function runVerify() {
+// tampered: verify a copy whose approved address was changed (spec 07 M6);
+// the receipt on disk is never touched
+async function runVerify(tampered) {
   if (!S.receipt || !S.receipt.path || S.verifying) return;
   const seq = S.loadSeq;
   S.verifying = true; draw();
   let got;
-  try { got = await getJSON("/api/verify?path=" + encodeURIComponent(S.receipt.path), { method: "POST" }); }
+  const url = (tampered === true ? "/api/verify/tampered?path=" : "/api/verify?path=") + encodeURIComponent(S.receipt.path);
+  try { got = await getJSON(url, { method: "POST" }); }
   catch (err) { got = { output: "error: " + err.message, exit_code: 1 }; }
+  got.tampered = tampered === true;
   S.verifying = false;
   if (seq === S.loadSeq) { S.verify = got; S.verifyAt = Date.now(); }   // only for the receipt still on screen
   draw();

@@ -78,6 +78,10 @@ class PlaywrightDriver(BrowserDriver):
     channel (F4/F5), never from the DOM.
     """
 
+    # Spec 07 M3: the loop captures the screen again right before a sensitive
+    # action, so the check sees the page at the click, not when the agent looked.
+    recapture_before_sensitive = True
+
     def __init__(self, page, portal_url, scenario, variant, pixel_channel=None, run_dir=None):
         self.page = page
         self.portal_url = portal_url.rstrip("/")

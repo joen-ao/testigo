@@ -73,7 +73,7 @@ em { font-style: italic; }
 .btn-secondary:hover { color: var(--fg); border-color: var(--teal); }
 .btn-primary[disabled], .btn-secondary[disabled] { background: var(--ink-3); border-color: var(--line); color: var(--faint); cursor: default; transform: none; box-shadow: none; }
 .btn-primary svg, .btn-secondary svg { width: 18px; height: 18px; }
-.btn-link { color: var(--muted); font-weight: 600; padding: 12px 6px; }
+.btn-link { color: var(--muted); font-weight: 600; padding: 12px 6px; background: none; border: 0; font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .btn-link:hover { color: var(--fg); }
 /* small controls of the shared pieces (record, discard, deny) */
 .btn {
@@ -292,6 +292,7 @@ em { font-style: italic; }
 :is(.exhibit:hover, .exhibit:focus-within, .exhibit.lit, .thumb) .spec-code .hidden-text { color: var(--amber); background: transparent; }
 :is(.exhibit:hover, .exhibit:focus-within, .exhibit.lit, .thumb) .spec-banner .hidden-text { color: var(--amber-ink); background: #FBF1DE; }
 :is(.exhibit:hover, .exhibit:focus-within, .exhibit.lit, .thumb) .forged { color: var(--amber-ink); background: #FBF1DE; }
+.spec-swap .was { text-decoration: line-through; color: var(--paper-muted); font-size: 13px; }
 
 .lp .how .wrap { display: flex; flex-direction: column; gap: 64px; }
 .lp .howline { position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; }
@@ -838,3 +839,16 @@ h1.title { font-family: var(--display); font-weight: 400; font-size: 44px; line-
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .scanner { display: none; }
 }
+
+/* spec 07: who did each step, the rules editor, the history table */
+.plainlog .who { display: inline-block; margin-left: 6px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; line-height: 18px; color: var(--muted); white-space: nowrap; vertical-align: 1px; }
+.rule-form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; padding: 20px; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--ink-2); max-width: 640px; }
+.rule-form input[type="number"] { display: block; margin-top: 6px; width: 200px; max-width: 100%; height: 40px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--ink); color: var(--fg); font: inherit; font-variant-numeric: tabular-nums; }
+.rtable.history td { vertical-align: middle; }
+.rtable.history .chip { white-space: nowrap; }
+#hv-term { margin-top: 20px; }
+#hv-term .term-body { white-space: pre-wrap; }
+.site-foot a { color: var(--teal); }

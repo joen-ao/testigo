@@ -187,3 +187,101 @@ class TaskTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class RecaptureTests(unittest.TestCase):
+    """Spec 07 M3: a driver that recaptures before a sensitive action has the
+    check read the screen at the click, not the frame the agent looked at."""
+
+    def driver(self, recapture):
+        from receipts import keys  # noqa: F401
+        from tests.fixtures import captures as fx
+
+        class Changing(FixtureDriver):
+            recapture_before_sensitive = recapture
+
+            def __init__(self):
+                super().__init__("clean")
+                self.seen = 0
+
+            def observe(self):
+                self.seen += 1
+                # the agent looks at an honest screen; at the click it has changed
+                return fx.capture_clean(150) if self.seen == 1 else fx.capture_a3(151)
+
+            def pixel_channel(self):
+                ch = fx.channel_for("clean")
+                ch.set_regions(151, fx._regions(address=fx.A3))
+                return ch
+        return Changing()
+
+    def run_with(self, recapture):
+        from receipts import keys
+        return loop_run(self.driver(recapture), ScriptedAgent(), supervised=True,
+                        signing_key=keys.generate_seed())
+
+    def test_the_check_reads_the_screen_at_the_click(self):
+        out = self.run_with(True)
+        self.assertTrue(out.blocked)
+        self.assertIsNone(out.order)
+        checks = [e for e in out.events if e["type"] == "check.result"]
+        self.assertEqual((checks[0]["frame"], checks[0]["status"]), (151, ev.POLICY_VIOLATION))
+        self.assertEqual(out.intercepted, out.actions)
+
+    def test_without_recapture_the_check_reads_what_the_agent_saw(self):
+        out = self.run_with(False)
+        checks = [e for e in out.events if e["type"] == "check.result"]
+        self.assertEqual(checks[0]["frame"], 150)
+        self.assertFalse(out.blocked)
+
+
+class ChangedWhileCheckingTests(unittest.TestCase):
+    """Spec 07 M3, review: the screen at the click must be the screen that was
+    checked. A4 swapping the address during the (seconds long) check is not
+    clicked; the next attempt is re-read against the approval and blocked."""
+
+    def test_a_swap_during_the_check_is_never_clicked(self):
+        from receipts import keys
+        from tests.fixtures import captures as fx
+
+        def shot(c, png):
+            c.screenshot = png
+            return c
+
+        class Swapping(FixtureDriver):
+            recapture_before_sensitive = True
+
+            def __init__(self):
+                super().__init__("clean")
+                self.seen = 0
+
+            def observe(self):
+                self.seen += 1
+                # agent look and check: honest; from the third capture on: swapped
+                if self.seen <= 2:
+                    return shot(fx.capture_clean(150), PNG_CLEAN)
+                return shot(fx.capture_a3(151), PNG_SWAPPED)
+
+            def pixel_channel(self):
+                ch = fx.channel_for("clean")
+                ch.set_regions(151, fx._regions(address=fx.A3))
+                return ch
+
+        d = Swapping()
+        out = loop_run(d, ScriptedAgent(), supervised=True, signing_key=keys.generate_seed())
+        self.assertIsNone(out.order)
+        self.assertIsNone(d.last_order)
+        self.assertTrue(out.blocked)
+        labels = [e.get("label", "") for e in out.events if e["type"] == "agent.step"]
+        self.assertIn("screen changed while checking: not clicked", labels)
+
+
+def _png(color):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (1280, 800), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+PNG_CLEAN, PNG_SWAPPED = _png((255, 255, 255)), _png((250, 250, 250))

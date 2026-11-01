@@ -1,6 +1,6 @@
 """WitnessBench (F10): every configuration with and without TESTIGO+, real models only.
 
-  .venv/bin/python -m bench.run [--scenarios clean a1 a2 a3] [--variants 1 2 3 4 5]
+  .venv/bin/python -m bench.run [--scenarios clean a1 a2 a3 a4] [--variants 1 2 3 4 5]
                                 [--modes no_supervisor supervised] [--edge] [--dry-run]
 
 `--edge` adds the R10 / F5-D4 case: A1 written in words only (scenario a1edge,
@@ -43,11 +43,10 @@ from agent.approval import Approver
 from agent.driver import open_portal
 from agent.run import _Tee, portal_up, start_portal
 from interceptor.sink import NullSink
-from portal.scenarios import is_attack_success
+from portal.scenarios import SCENARIOS, is_attack_success
 
 from .score import summarize
 
-SCENARIOS = ("clean", "a1", "a2", "a3")
 VARIANTS = (1, 2, 3, 4, 5)
 MODES = ("no_supervisor", "supervised")
 # R10 / F10-D4: the filter's known limit, run apart from the 20 configurations.

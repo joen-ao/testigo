@@ -161,62 +161,75 @@ class SamSparkChannel(PixelChannel):
     def _read(self, capture):
         png = capture.screenshot
         w, h = png_size(png)
-        screen = self._spark_json(png, SCREEN_PROMPT % (w, h), SCREEN_SCHEMA)
-        if screen is None:
-            return []
-        capture.rendered_lines = [" ".join(str(x).split()) for x in screen["lines"]]
-
-        with ThreadPoolExecutor(max_workers=7) as pool:
-            amount = pool.submit(self._refine, png, screen["amount"]["box"], w, h)
-            address = pool.submit(self._refine, png, screen["address"]["box"], w, h)
+        # Spec 07 M4: what does not depend on the full read (the four tiles and
+        # SAM's search for the confirm button) starts with it, and each crop
+        # is re-read as soon as its region is refined. Same calls, same result;
+        # only the waiting overlaps.
+        pool = ThreadPoolExecutor(max_workers=8)
+        try:
             button = pool.submit(self.meta.segment, png, "confirm button")
-            tiles = [pool.submit(self._spark_json, t, TILE_PROMPT, LINES_SCHEMA)
-                     for t in tiles_2x(png)]
-            boxes = {"amount": amount.result(), "address": address.result()}
-            found = button.result()[0]
+            tiles = [pool.submit(self._tile, png, box) for box in tile_boxes(w, h)]
+            screen = self._spark_json(png, SCREEN_PROMPT % (w, h), SCREEN_SCHEMA)
+            if screen is None:
+                return []
+            capture.rendered_lines = [" ".join(str(x).split()) for x in screen["lines"]]
+            regions = {label: pool.submit(self._region, png, screen[label], label, w, h)
+                       for label in ("amount", "address")}
             for f in tiles:
                 got = f.result()
                 if got is None:
                     return []              # a tile out of schema: cannot vouch for the screen
                 capture.rendered_lines += [" ".join(str(x).split()) for x in got["lines"]]
+            found = button.result()[0]
 
-        out = []
-        if found:
-            best = max(found, key=lambda b: b.get("confidence") or 0)
-            out.append({"label": "confirm button", "box": best["box"], "text": "",
-                        "confidence": best.get("confidence") or 0.0})
-
-        # Review of F4: SAM must refine the SAME element Spark pointed at (the
-        # centre of SAM's box inside Spark's rough box, with the margin SAM was
-        # given; Spark's boxes are rough), never a union of two places; and the
-        # crop, read alone, must say what the first pass said. Otherwise the
-        # region gets no confidence and the engine blocks (cannot_verify).
-        from receipts.receipt import norm_read
-        crops = {}
-        for label, sam in boxes.items():
-            rough = clamp(screen[label]["box"], w, h)
-            if sam is None or not centered_in(sam["box"], rough, margin=8):
-                continue
-            # the address crop keeps Spark's box: it holds the name and the address
-            box = sam["box"] if label == "amount" else rough
-            crops[label] = (crop(png, box), box, sam.get("confidence") or 0.0)
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            reads = {label: pool.submit(self._spark_json, c[0], CROP_PROMPT, CROP_SCHEMA)
-                     for label, c in crops.items()}
-            for label, (data, box, conf) in crops.items():
-                got = reads[label].result()
-                text = got["text"] if got else ""
-                agrees = got is not None and norm_read(label, text) == norm_read(
-                    label, screen[label]["text"])
+            out = []
+            if found:
+                best = max(found, key=lambda b: b.get("confidence") or 0)
+                out.append({"label": "confirm button", "box": best["box"], "text": "",
+                            "confidence": best.get("confidence") or 0.0})
+            for label, f in regions.items():
+                got = f.result()
+                if got is None:
+                    continue
+                data, region = got
                 capture.crops[label] = data
-                # A text region is sure when SAM located it inside Spark's box
-                # and the crop, read alone, agrees with the first read. SAM's own
-                # score on a box prompt around text stays low (0.2-0.4 on honest
-                # screens, WitnessBench 1 Nov), so it is kept for display only.
-                out.append({"label": label, "box": box, "text": text,
-                            "confidence": 1.0 if agrees else 0.0, "sam_confidence": conf})
-        return out
+                out.append(region)
+            return out
+        finally:
+            # an early return cancels what has not started and waits for the rest,
+            # so a retry never overlaps calls still running (and billing)
+            pool.shutdown(wait=True, cancel_futures=True)
+
+    def _tile(self, png, box):
+        return self._spark_json(tile_2x(png, box), TILE_PROMPT, LINES_SCHEMA)
+
+    def _region(self, png, first, label, w, h):
+        """One text region: SAM refines Spark's rough box, the crop is cut and
+        read alone. (crop bytes, region) or None when SAM missed it.
+
+        Review of F4: SAM must refine the SAME element Spark pointed at (the
+        centre of SAM's box inside Spark's rough box, with the margin SAM was
+        given; Spark's boxes are rough), never a union of two places; and the
+        crop, read alone, must say what the first pass said. Otherwise the
+        region gets no confidence and the engine blocks (cannot_verify)."""
+        from receipts.receipt import norm_read
+        rough = clamp(first["box"], w, h)
+        sam = self._refine(png, first["box"], w, h)
+        if sam is None or not centered_in(sam["box"], rough, margin=8):
+            return None
+        # the address crop keeps Spark's box: it holds the name and the address
+        box = sam["box"] if label == "amount" else rough
+        data = crop(png, box)
+        got = self._spark_json(data, CROP_PROMPT, CROP_SCHEMA)
+        text = got["text"] if got else ""
+        agrees = got is not None and norm_read(label, text) == norm_read(label, first["text"])
+        # A text region is sure when SAM located it inside Spark's box and the
+        # crop, read alone, agrees with the first read. SAM's own score on a box
+        # prompt around text stays low (0.2-0.4 on honest screens, WitnessBench
+        # 1 Nov), so it is kept for display only.
+        conf = sam.get("confidence") or 0.0
+        return data, {"label": label, "box": box, "text": text,
+                      "confidence": 1.0 if agrees else 0.0, "sam_confidence": conf}
 
     def read_label(self, crop_png):
         """The text of one crop (a button's label), read alone in the fixed schema."""
@@ -356,21 +369,27 @@ def inside(a, b):
     return ix * iy / area
 
 
-def tiles_2x(png, overlap=40):
-    """Four overlapping quarters of the capture, each enlarged 2x, as PNG."""
+def tile_boxes(w, h, overlap=40):
+    """The four overlapping quarters of a w x h capture, as (x1, y1, x2, y2)."""
+    return [(x1, y1, x2, y2) for x1, x2 in ((0, w // 2 + overlap), (w // 2 - overlap, w))
+            for y1, y2 in ((0, h // 2 + overlap), (h // 2 - overlap, h))]
+
+
+def tile_2x(png, box):
+    """One quarter of the capture, enlarged 2x, as PNG."""
     from PIL import Image
     with Image.open(io.BytesIO(png)) as im:
-        im = im.convert("RGB")
-        w, h = im.size
-        out = []
-        for x1, x2 in ((0, w // 2 + overlap), (w // 2 - overlap, w)):
-            for y1, y2 in ((0, h // 2 + overlap), (h // 2 - overlap, h)):
-                tile = im.crop((x1, y1, x2, y2))
-                tile = tile.resize((tile.width * 2, tile.height * 2), Image.LANCZOS)
-                buf = io.BytesIO()
-                tile.save(buf, format="PNG")
-                out.append(buf.getvalue())
-        return out
+        tile = im.convert("RGB").crop(box)
+        tile = tile.resize((tile.width * 2, tile.height * 2), Image.LANCZOS)
+        buf = io.BytesIO()
+        tile.save(buf, format="PNG")
+        return buf.getvalue()
+
+
+def tiles_2x(png, overlap=40):
+    """Four overlapping quarters of the capture, each enlarged 2x, as PNG."""
+    w, h = png_size(png)
+    return [tile_2x(png, box) for box in tile_boxes(w, h, overlap)]
 
 
 def crop(png, box, pad=4):

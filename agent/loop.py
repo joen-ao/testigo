@@ -127,11 +127,19 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
             agent.result(action, "not executed: invalid action %s" % action.get("detail", ""))
             continue
 
+        is_sensitive = False
         if supervised:
             out.intercepted += 1                  # the hook: nothing skips this line
             is_sensitive, why = sensitive(action, obs)
             if why:
                 out.emit(ev.agent_step(obs.frame, ("sensitive: %s" if is_sensitive else "%s") % why))
+            if is_sensitive and getattr(driver, "recapture_before_sensitive", False):
+                # Spec 07 M3: check the screen as it is at the click, not as it
+                # was when the agent looked. A page that changes while the agent
+                # decides (A4) is read in its changed state.
+                obs = driver.observe()
+                out.last_capture = obs
+                out.emit(ev.frame_captured(obs.frame, obs.sha(), image=getattr(obs, "image", None)))
             if is_sensitive and approved is not None:
                 # F8, first moment: a later confirming click (confirm on the review
                 # screen). Read again; anything other than a match blocks here.
@@ -166,6 +174,14 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                     approved = {"event": a, "info": info, "crops": a["crops"],
                                 "bytes": {n: obs.crops.get(n, b"") for n in CROP_NAMES},
                                 "read": {"amount": usd(a["amount_cents"]), "address": a["address"]}}
+
+        if supervised and is_sensitive and getattr(driver, "recapture_before_sensitive", False) \
+                and not _unchanged_since_check(driver, obs, interceptor.last_regions, out):
+            # Spec 07 M3, review: the check takes seconds; a page that changed
+            # meanwhile is not clicked. The agent looks again, and the next
+            # sensitive click is checked against what the person approved.
+            agent.result(action, "not executed: the screen changed while it was being checked; look again")
+            continue
 
         try:
             driver.execute(action)
@@ -203,6 +219,26 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
     out.emit(ev.agent_step(getattr(obs, "frame", 0), "stopped: max_steps (%d)" % max_steps))
     _late_order(out, driver, supervised, approved)
     return out
+
+
+def _unchanged_since_check(driver, checked, regions, out):
+    """Capture once more right before the click: the amount and address regions
+    must be the same pixels the check read (crops of the same boxes, byte for
+    byte). With no boxes, the whole screenshot must be the same."""
+    from interceptor.channels import crop
+    if not getattr(checked, "screenshot", b""):
+        return True                        # nothing to compare (no screenshot)
+    now = driver.observe()
+    out.last_capture = now
+    out.emit(ev.frame_captured(now.frame, now.sha(), image=getattr(now, "image", None)))
+    boxes = [r["box"] for r in regions or [] if r.get("label") in ("amount", "address") and r.get("box")]
+    if len(boxes) < 2:
+        same = now.screenshot == checked.screenshot
+    else:
+        same = all(crop(now.screenshot, b) == crop(checked.screenshot, b) for b in boxes)
+    if not same:
+        out.emit(ev.agent_step(now.frame, "screen changed while checking: not clicked"))
+    return same
 
 
 def _late_order(out, driver, supervised, approved):
