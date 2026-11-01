@@ -1,6 +1,6 @@
 """Tests for the agent loop and the gate invariant.
 
-  make test   (or: .venv/bin/python -m pytest agent)
+  make test   (or: .venv/bin/python -m pytest app/runtime/loop)
 """
 
 import unittest
@@ -336,3 +336,61 @@ class RegionChangedTests(unittest.TestCase):
         self.assertIsNone(d.last_order)
         labels = [e.get("label", "") for e in out.events if e["type"] == "agent.step"]
         self.assertIn("stopped: the screen kept changing while it was checked", labels)
+
+
+class NoOrderOnScreenTests(unittest.TestCase):
+    """A click checked only because no confirm button was found (fail closed)
+    goes ahead when the screen shows no order at all: the account page."""
+
+    def run_on(self, regions):
+        from app.core.evidence import keys
+        from app.core.decision.sensitive import NO_BUTTON
+        from tests.fixtures import captures as fx
+
+        class Account(FixtureDriver):
+            def __init__(self):
+                super().__init__("clean")
+                self.clicked = []
+
+            def observe(self):
+                return fx.capture_clean(150)
+
+            def pixel_channel(self):
+                ch = fx.channel_for("clean")
+                ch.set_regions(150, regions)
+                return ch
+
+            def execute(self, action):
+                self.clicked.append(action)
+
+        class ClickThenDone:
+            tool = "scripted"
+
+            def __init__(self):
+                self.n = 0
+
+            def propose(self, obs):
+                self.n += 1
+                return {"kind": "click", "x": 76, "y": 308} if self.n == 1 else {"kind": "done"}
+
+            def result(self, action, text):
+                pass
+
+        d = Account()
+        out = loop_run(d, ClickThenDone(), supervised=True, signing_key=keys.generate_seed(),
+                       sensitive=lambda action, obs: (action["kind"] == "click", NO_BUTTON if action["kind"] == "click" else ""))
+        return out, d
+
+    def test_account_page_click_goes_ahead(self):
+        from tests.fixtures import captures as fx
+        out, d = self.run_on([r for r in fx._regions() if r["label"] == "address"])
+        self.assertFalse(out.blocked)
+        self.assertEqual(len(d.clicked), 1)
+        self.assertIn("no order on this screen: the click goes ahead",
+                      [e.get("label") for e in out.events if e["type"] == "agent.step"])
+
+    def test_a_screen_with_a_total_but_no_button_is_still_held(self):
+        from tests.fixtures import captures as fx
+        out, d = self.run_on([r for r in fx._regions() if r["label"] != "confirm button"])
+        self.assertTrue(out.blocked)
+        self.assertEqual(d.clicked, [])

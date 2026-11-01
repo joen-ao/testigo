@@ -16,7 +16,7 @@ make test                                         # unit tests (all packages)
 .venv/bin/python -m app.core.policy.model            # inspect the signed policy
 ```
 
-Paths resolve from the repo root (`common/config.py`). The test captures and
+Paths resolve from the repo root (`app/common/config.py`). The test captures and
 the demo live in `tests/` since F0: they prove the rules are wired, not that
 detection works on real captures.
 
@@ -37,17 +37,21 @@ or swapped DOM value can't push an order to another address.
 ## Pieces
 
 ```
-interceptor/
-  policy.py      load + hash the signed policy; address/amount checks
-  events.py      constructors for every event (check.result, verify.result, …)
-  channels.py    Capture + PixelChannel; FixtureChannel (tests) and the
-                 SamSparkChannel stub (plug SAM 3.1 + Spark here)
-  engine.py      the five rules + after-click verify  <- the contribution
-  service.py     FastAPI service: status page now, events and UI later (F11)
-  test_engine.py unit tests
+app/core/decision/
+  engine.py              the five rules + after-click verify  <- the contribution
+  instruction_filter.py  does divergent text read as an instruction? (F5)
+  sensitive.py           which actions are sensitive (the confirm click)
+  events.py              constructors for every event (check.result, verify.result, …)
+  guard.py               check_screen(): the same engine for any agent (spec 07 M9)
+  test_*.py              unit tests
 ```
 
-The committed policy lives in `policy/larkspur.policy.yaml`; one signed live from
+Moved out on 1 Nov (spec 09): the policy model to `app/core/policy/model.py`,
+`Capture` + `PixelChannel` (`FixtureChannel`, `SamSparkChannel`) to
+`app/adapters/meta/channels.py`, and the FastAPI service to
+`app/runtime/service/api.py`.
+
+The committed policy lives in `app/core/policy/larkspur.policy.yaml`; one signed live from
 view 1 goes to `runs/policy/active.policy.yaml` and wins while it exists
 (`app.common.config.policy_path()`, used by the service, the loop, the bench and
 `testigo verify`). Its sha256 is stamped in and is the same hash the receipt and

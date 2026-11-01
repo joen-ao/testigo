@@ -50,7 +50,7 @@ def check(capture, regions):
 
 class PolicyNotMet(unittest.TestCase):
     """Rule: an order the signed rules do not allow is blocked before the click
-    (interceptor/engine.py, interceptor/policy.py)."""
+    (app/core/decision/engine.py, app/core/policy/model.py)."""
 
     def test_attackers_address(self):
         d = check(fx.capture_a3(), fx._regions(address=fx.A3))
@@ -72,7 +72,7 @@ class PolicyNotMet(unittest.TestCase):
 
 class NoReadableEvidence(unittest.TestCase):
     """Rule: without a clear read of the total and the address, nothing is
-    allowed (cannot_verify; interceptor/engine.py rule 1)."""
+    allowed (cannot_verify; app/core/decision/engine.py rule 1)."""
 
     def test_missing_region(self):
         self.assertEqual(check(fx.capture_clean(), fx._regions(drop="address")).status, ev.CANNOT_VERIFY)
@@ -90,7 +90,7 @@ class NoReadableEvidence(unittest.TestCase):
 
 class ModelFailure(unittest.TestCase):
     """Rule: a model that fails or answers outside its schema never vouches for
-    a screen (interceptor/channels.py): cannot_verify."""
+    a screen (app/adapters/meta/channels.py): cannot_verify."""
 
     def capture(self):
         c = fx.capture_clean()
@@ -127,7 +127,7 @@ class ModelFailure(unittest.TestCase):
 
 class CodeAndPixelsDiverge(unittest.TestCase):
     """Rule: text in the page code that is not on screen (A1), or on screen and
-    not in the code (A2), blocks (interceptor/engine.py, instruction_filter.py)."""
+    not in the code (A2), blocks (app/core/decision/engine.py, instruction_filter.py)."""
 
     def test_hidden_in_the_code(self):
         self.assertEqual(check(fx.capture_a1(), fx._regions()).status, ev.DIVERGENCE)
@@ -143,7 +143,7 @@ class CodeAndPixelsDiverge(unittest.TestCase):
 
 class SensitiveNeedsThePerson(unittest.TestCase):
     """Rule: a click that confirms an order is never allowed on its own; the
-    person approves what the pixels show (interceptor/engine.py, agent/loop.py)."""
+    person approves what the pixels show (app/core/decision/engine.py, app/runtime/loop/loop.py)."""
 
     def test_clean_screen_still_asks(self):
         d = check(fx.capture_clean(), fx._regions())
@@ -164,7 +164,7 @@ class SensitiveNeedsThePerson(unittest.TestCase):
 class ApprovedThenChanged(unittest.TestCase):
     """Rule: what the person approved is what gets clicked. A change before the
     click blocks (F8 re-read); a change during the check is never clicked
-    (spec 07 M3; agent/loop.py)."""
+    (spec 07 M3; app/runtime/loop/loop.py)."""
 
     def driver(self, screens):
         class Changing(FixtureDriver):
@@ -203,7 +203,7 @@ class ApprovedThenChanged(unittest.TestCase):
 
 
 class TamperedEvidence(unittest.TestCase):
-    """Rule: anyone can tell an edited receipt from a real one (receipts/verify.py):
+    """Rule: anyone can tell an edited receipt from a real one (app/security/verifier/verify.py):
     a changed field breaks the signature; a swapped crop or screen breaks its hash."""
 
     def setUp(self):
@@ -266,7 +266,7 @@ class TamperedEvidence(unittest.TestCase):
 
 class PolicyNotTrusted(unittest.TestCase):
     """Rule: rules that are edited or not signed by the owner are never used;
-    the system fails closed (common/config.py)."""
+    the system fails closed (app/common/config.py)."""
 
     def setUp(self):
         from app.core.policy.compile import HEADER, sign_policy_dict, to_yaml
@@ -304,7 +304,7 @@ class PolicyNotTrusted(unittest.TestCase):
 
 class SpendPerRun(unittest.TestCase):
     """Rule: no single run spends more than MAX_RUN_SPEND_USD (spec 08 H3;
-    common/meta_client.py)."""
+    app/adapters/meta/client.py)."""
 
     def test_the_run_cap_stops_calls_and_resets_per_run(self):
         from types import SimpleNamespace as NS

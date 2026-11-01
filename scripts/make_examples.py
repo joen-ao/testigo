@@ -11,7 +11,7 @@ Writes:
 
 The receipts are signed with an Ed25519 key generated in memory and dropped
 when the script exits; only its public half is written. They reference the
-committed policy (policy/larkspur.policy.yaml), which `testigo verify` trusts by
+committed policy (app/core/policy/larkspur.policy.yaml), which `testigo verify` trusts by
 its hash, so they verify from a fresh clone. The "crop" files are placeholder
 bytes, not screenshots. Signatures, ids and times change on every run; the
 shape and the verdicts do not.

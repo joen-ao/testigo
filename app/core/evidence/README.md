@@ -80,26 +80,31 @@ The receipt carries the signer's `pubkey`. That is convenient, not the root of
 trust: pin the expected key out of band and verify against it —
 
 ```bash
-./testigo verify receipt.json --pubkey b1ac36f3…
+.venv/bin/testigo verify receipt.json --pubkey b1ac36f3…
 ```
 
 The signature covers the `pubkey` field, so a receipt can't be re-pointed to a
 different key without re-signing, which only the real key holder can do. The
 hashes are the same ones the interceptor and the loop produce, and
-`policy_sha256` is the same hash `interceptor/policy.py` reports — the number on
+`policy_sha256` is the same hash `app/core/policy/model.py` reports — the number on
 the receipt is the number that was checked.
 
 ## Pieces
 
 ```
-receipts/
+app/core/evidence/
   keys.py          keygen / sign / verify (cryptography); key files in .secrets/
   receipt.py       build + sign; canonical serialization; signature verify
   bundle.py        the receipt of a run: key, sign, write receipt.json + crops
+  test_receipts.py tests
+
+app/security/verifier/
   verify.py        the four checks (library)
   cli.py           `testigo verify|keygen` (installed as the `testigo` command)
-  test_receipts.py tests
 ```
+
+Since 1 Nov (spec 09) building and signing live in the core and checking lives
+in the independent verifier, which only reads receipts and evidence.
 
 `.secrets/` and `runs/` are git-ignored.
 

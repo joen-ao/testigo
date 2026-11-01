@@ -180,7 +180,7 @@ class PlaywrightDriver(BrowserDriver):
         return _scorer_get(self.portal_url, "/api/orders")
 
 
-SESSION_COOKIE = "dx_session"   # portal/server.py COOKIE
+SESSION_COOKIE = "dx_session"   # app/sim/portal/server.py COOKIE
 
 
 def _session_cookie(page, portal_url):

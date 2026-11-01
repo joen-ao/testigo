@@ -9,7 +9,7 @@ Its invariant: in a supervised run every proposed action passes through this
 hook before the driver can run it (`intercepted == actions`); the sensitive
 ones (R4: a click on a protected button, read from the pixels) also pass
 through `interceptor.check`, and every approved order is re-checked with
-`interceptor.verify` after the click.
+`Interceptor.reread` after the click.
 
 With supervised=False the interceptor is removed entirely (spec row 3 / View
 3): the agent acts directly and no receipt is kept.
@@ -27,7 +27,7 @@ from app.core.decision import events as ev
 from app.core.decision.engine import Interceptor
 from app.core.policy.model import load as load_policy
 
-from app.core.decision.sensitive import confirm_only
+from app.core.decision.sensitive import NO_BUTTON, confirm_only
 from app.core.evidence import bundle
 from app.core.evidence.receipt import CROP_NAMES
 
@@ -167,11 +167,21 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                 lat = FIXTURE_LATENCY_MS if getattr(driver, "is_test_double", False) else None
                 decision = interceptor.check(_as_confirm(action), obs, latency_ms=lat)
                 out.checked += 1
-                out.emit(decision.check_event)
-                if decision.blocked:
+                if why.startswith(NO_BUTTON) and _no_order_on_screen(decision, interceptor.confidence_min):
+                    # A click was checked only because no confirm button was found
+                    # (fail closed), and the screen shows no order either: no total,
+                    # no confirm button (the account page). There is nothing to
+                    # approve; the click goes ahead. Any order it led to without an
+                    # approval is still reported (unapproved_order).
+                    out.emit(ev.agent_step(obs.frame, "no order on this screen: the click goes ahead"))
+                    is_sensitive = False
+                    decision = None
+                else:
+                    out.emit(decision.check_event)
+                if decision is not None and decision.blocked:
                     out.blocked = True
                     return out
-                if decision.needs_approval:
+                if decision is not None and decision.needs_approval:
                     out.emit(decision.approval_event)
                     granted, info = approver.approve(decision.approval_event)
                     out.emit(ev.approval_granted(info["method"], info["voice_transcript"],
@@ -285,6 +295,15 @@ def region_changed(before_png, after_png, box=None):
         return True
 
 
+def _no_order_on_screen(decision, confidence_min):
+    """The check found neither an order total nor a confirm button it is sure of."""
+    if decision.status != ev.CANNOT_VERIFY:
+        return False
+    sure = {r["label"] for r in decision.check_event.get("regions") or []
+            if (r.get("confidence") or 0) >= confidence_min}
+    return "amount" not in sure and "confirm button" not in sure
+
+
 def _late_order(out, driver, supervised, approved):
     """An order whose request finished after the step that caused it (review of
     F3): read the log once more before the run ends, so it is never missed."""
@@ -327,7 +346,7 @@ def _agent_name(agent, policy):
 
 def _sign_receipt(out, policy, approval_event, info, approved_bytes, after, vr, executed_read,
                   agent_name, run_dir, signing_key, frame, blocked_at=None, approved_screen=b""):
-    """F9: sign the receipt of the approved order (receipts/bundle.py). A
+    """F9: sign the receipt of the approved order (app/core/evidence/bundle.py). A
     missing key or an unwritable folder is reported, never fatal."""
     if signing_key is False:
         seed, why = None, "test run without a test key (the owner's key never signs test evidence)"

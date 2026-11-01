@@ -231,6 +231,7 @@ function plainText(e, r) {
       if (l === "proposed: done") return [ICON.user, "info", "The agent says it is finished."];
       if (/^stopped: max_steps/.test(l)) return [ICON.dot, "warn", "The agent ran out of steps."];
       if (/^sensitive/.test(l)) return [ICON.eye, "info", "This click would confirm the order. Checking the screen first."];
+      if (/^no order on this screen/.test(l)) return [ICON.eye, "info", "No order on this screen, so the click goes ahead."];
       if (/^stopped: the screen kept changing/.test(l)) return [ICON.stop, "bad", "Stopped: the screen kept changing while TESTIGO+ checked it. No click."];
       if (/^screen changed while checking/.test(l)) return [ICON.warn, "warn", "The screen changed while TESTIGO+ was checking it, so the click was not made. The agent looks again."];
       if (/without a check or approval/.test(l)) return [ICON.warn, "lost", "The order was confirmed with nobody checking it."];
@@ -547,6 +548,7 @@ function checking(r) {
   if (!r || r.mode !== "supervised" || needsYou(r) || outcome(r).kind !== "running") return false;
   for (let i = r.log.length - 1; i >= 0; i--) {
     const e = r.log[i];
+    if (e.type === "agent.step" && /^no order on this screen/.test(e.label || "")) return false;
     if (e.type === "agent.step" && /^sensitive/.test(e.label || "")) return true;
     if (["check.result", "approval.requested", "approval.granted", "verify.result", "order.confirmed"].includes(e.type)) return false;
   }

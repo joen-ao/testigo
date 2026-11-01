@@ -85,7 +85,7 @@ def tool_check_screen(args, check=None):
     if len(png) > MAX_PNG_BYTES or not png.startswith(b"\x89PNG\r\n\x1a\n"):
         raise ToolError("the screenshot must be a PNG under %d MB" % (MAX_PNG_BYTES // (1024 * 1024)))
     if check is None:
-        from app.core.decision.guard import check_screen as check
+        from app.runtime.guard import check_screen as check
     return check(png, text)
 
 
@@ -103,7 +103,7 @@ def tool_verify_receipt(args):
 
 
 def tool_policy(_args):
-    from app.core.decision.guard import policy_summary
+    from app.runtime.guard import policy_summary
     return policy_summary()
 
 

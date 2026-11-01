@@ -25,8 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.adapters.meta.client import image_content
 
-REQUIRED_REGIONS = ("amount", "address", "confirm button")
-CONFIDENCE_MIN = 0.50
+from app.core.decision.regions import CONFIDENCE_MIN, REQUIRED_REGIONS  # noqa: E402,F401 - owned by core
 
 
 def sha_crop(data):

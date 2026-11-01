@@ -1,6 +1,6 @@
 """TEST ONLY: build a signed receipt bundle from fixture captures.
 
-Moved out of receipts/ by F0: it signs evidence made of placeholder bytes, so
+Moved out of app/core/evidence/ by F0: it signs evidence made of placeholder bytes, so
 it can only prove that signing and `testigo verify` work. Real bundles come
 from real runs (F9). Without --key it signs with a throwaway key, never with
 the key in .secrets/.

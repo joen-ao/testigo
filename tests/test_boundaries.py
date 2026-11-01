@@ -1,7 +1,7 @@
 """F0 §8 and §10: two boundaries enforced as tests.
 
-1. Only common/meta_client.py creates an API client, and only it and
-   common/config.py touch META_API_KEY (scripts/check_secrets.py names it to
+1. Only app/adapters/meta/client.py creates an API client, and only it and
+   app/common/config.py touch META_API_KEY (scripts/check_secrets.py names it to
    look for leaks).
 2. No product module imports test data from tests/. Unit tests (test_*.py)
    next to the code may, product code may not.
@@ -12,10 +12,9 @@ import unittest
 
 from app.common.config import ROOT
 
-PRODUCT_DIRS = ("common", "portal", "agent", "interceptor", "receipts", "policy",
-                "approval", "gate", "scripts")
-KEY_ALLOWED = {"common/config.py", "common/meta_client.py", "scripts/check_secrets.py"}
-CLIENT_ALLOWED = {"common/meta_client.py"}
+PRODUCT_DIRS = ("app", "bench", "gate", "scripts")
+KEY_ALLOWED = {"app/common/config.py", "app/adapters/meta/client.py", "scripts/check_secrets.py"}
+CLIENT_ALLOWED = {"app/adapters/meta/client.py"}
 
 
 def product_files():

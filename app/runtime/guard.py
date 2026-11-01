@@ -1,6 +1,6 @@
 """TESTIGO+ for any agent (spec 07 M9): one call before a sensitive click.
 
-    from app.core.decision.guard import check_screen
+    from app.runtime.guard import check_screen
     verdict = check_screen(png_bytes, page_text)
 
 `png_bytes` is the screenshot the click would act on, taken at the click.

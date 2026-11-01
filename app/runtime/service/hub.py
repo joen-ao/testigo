@@ -46,7 +46,7 @@ class InvalidEvent(ValueError):
 
 
 def validate(e):
-    """Accept only the event shapes in interceptor/events.py."""
+    """Accept only the event shapes in app/core/decision/events.py."""
     if not isinstance(e, dict):
         raise InvalidEvent("event must be a JSON object")
     if e.get("type") not in ev.TYPES:

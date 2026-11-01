@@ -26,7 +26,7 @@ order is not confirmed.
   --explain (only with --no-supervisor) after the run has ended, runs the pixel
                           channel and the code-vs-pixels comparison once on the
                           frame where the agent confirmed, observe only, and
-                          emits an explain.result event for view 3 (agent/explain.py).
+                          emits an explain.result event for view 3 (app/runtime/loop/explain.py).
                           It never changes the run or outcome.json; it is written
                           to explain.json. WitnessBench never uses it.
 """

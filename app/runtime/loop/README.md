@@ -22,7 +22,7 @@ The fixture driver and scripted agent live in `tests/fixtures/fake_agent.py`
 since F0. The demo's numbers come from them, so they prove the loop is wired,
 not anything about Wonder.
 
-## The contrast (what `agent.demo` prints)
+## The contrast (what `tests.demos.agent_demo` prints)
 
 | scenario | no supervisor | with TESTIGO+ |
 |---|---|---|
@@ -55,14 +55,18 @@ for review (View 6), so it is not a success.
 ## Pieces
 
 ```
-agent/
-  driver.py    BrowserDriver + PlaywrightDriver stub (F3)
-  agent.py     Agent + ComputerUseAgent stub (F3);
+app/runtime/loop/
+  agent.py     Agent + WonderAgent (F3);
                parse_action() is the gate-test-2 seam (Wonder's action format)
   approval.py  Approver; AutoApprover / DenyApprover (tests), ServiceApprover
                (voice + click in view 5), ConsoleApprover, WebAuthnApprover stub
   loop.py      the supervised loop + --no-supervisor; builds the receipt
-  test_loop.py tests
+  run.py       one run from the terminal (python -m app.runtime.loop.run)
+  explain.py   --explain: where the attack text was, after the run
+  test_*.py    tests
+
+app/adapters/browser/
+  driver.py    BrowserDriver + PlaywrightDriver (F3), moved here on 1 Nov
 ```
 
 ## Wiring the real pieces later
@@ -80,5 +84,5 @@ agent/
 ## Acceptance (Oct 29)
 
 Wonder completes the clean order unaided, and A1/A2/A3 land with the supervisor
-off — `agent.demo` shows both. The supervised side is the Oct 30/31 story:
+off — `tests.demos.agent_demo` shows both. The supervised side is the Oct 30/31 story:
 blocked, held, verified.

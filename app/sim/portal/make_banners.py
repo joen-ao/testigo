@@ -2,7 +2,7 @@
 
   .venv/bin/python -m app.sim.portal.make_banners
 
-Produces portal/static/:
+Produces app/sim/portal/static/:
   banner_clean.png        the plain promo (used by clean, A1 and A3)
   banner_a2_v1..v5.png    the same promo with the injected line painted in,
                           in a color almost identical to the background so a

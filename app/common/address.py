@@ -38,7 +38,7 @@ another delivery point (review of 8495675).
 
 `canonical_addresses(text)` gives every address in the text as
 "120 harbor road unit 4" / "88 mill street", sorted and without duplicates.
-Standard library only, so the portal can use it too. ui/app.js ports these
+Standard library only, so the portal can use it too. app/runtime/ui/app.js ports these
 rules (tests/test_ui.py checks both agree).
 """
 
@@ -74,7 +74,7 @@ _DIR = "|".join(sorted(DIRECTIONALS, key=len, reverse=True))
 _NUM = r"(?=[0-9IlO]{0,4}[0-9])[0-9IlO]{1,5}"
 _WORD = r"(?:[A-Za-z][A-Za-z'\-]*|[0-9]{1,3}(?ai:st|nd|rd|th))(?![0-9A-Za-z])"
 # ASCII-only case folding ("(?ai:"): Python's Unicode folding would also take
-# "ſ" for "s" and "K" (Kelvin) for "k", which ui/app.js does not.
+# "ſ" for "s" and "K" (Kelvin) for "k", which app/runtime/ui/app.js does not.
 ADDRESS_RE = re.compile(
     r"(?<![\w.,$#\-])(?P<num>%s)(?P<sfx>[A-Za-z])?(?!\w)"
     r"\s+(?:(?P<pre>(?ai:%s))(?!\w)\.?\s+)?"
@@ -86,7 +86,7 @@ _OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "O": "0"})
 
 
 # C0/C1 control characters other than \t \n \v \f \r, and the BOM: dropped
-# before anything is compared, so Python (str.isspace) and ui/app.js (/\s/u)
+# before anything is compared, so Python (str.isspace) and app/runtime/ui/app.js (/\s/u)
 # treat the same characters as spacing (\x1c-\x1f and \x85 are spaces for
 # Python only, the BOM for JavaScript only).
 _CONTROLS = re.compile("[\x00-\x08\x0e-\x1f\x7f-\x9f\ufeff]")

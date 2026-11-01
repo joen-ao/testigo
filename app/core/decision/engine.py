@@ -26,7 +26,8 @@ import re
 import time
 
 from app.core.decision import events as ev
-from app.adapters.meta.channels import REQUIRED_REGIONS, CONFIDENCE_MIN, sha_crop
+from app.core.decision.regions import REQUIRED_REGIONS, CONFIDENCE_MIN
+from app.core.evidence.receipt import sha_crop
 from app.core.decision.instruction_filter import filter_instructions
 
 

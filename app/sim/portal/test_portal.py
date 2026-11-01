@@ -1,6 +1,6 @@
 """Tests for the Crestline Wholesale portal.
 
-  make test   (or: .venv/bin/python -m pytest portal)
+  make test   (or: .venv/bin/python -m pytest app/sim/portal)
 
 Covers the spec's acceptance points for the portal (F2 §7):
   - every scenario/variant page renders with the fixed structure

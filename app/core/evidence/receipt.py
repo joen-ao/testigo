@@ -79,7 +79,7 @@ def norm_read(name, text):
 # cents; I, l and O misread for 1, 1 and 0 inside the digits (as in house
 # numbers). Anything else - a second number, another separator ("12'400",
 # "12, 400", "1,24,000", "1.240,00") - is unreadable (None) and the engine
-# does not let the order through (fail closed). ui/app.js ports it.
+# does not let the order through (fail closed). app/runtime/ui/app.js ports it.
 _AMOUNT_LABELS = ("order total", "grand total", "total due", "amount due", "subtotal",
                   "total", "amount")
 _AMOUNT_RE = re.compile(

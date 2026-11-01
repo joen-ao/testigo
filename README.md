@@ -155,7 +155,7 @@ The 31 Oct results are kept as they were (`docs/specs/03-revision-31-oct.md` §1
 | **Voice Transcribe** | the owner's mandate and the read-aloud approval |
 
 Unit tests run with test data only; the benchmark and the video use the real
-models. All calls go through one client (`common/meta_client.py`) that logs
+models. All calls go through one client (`app/adapters/meta/client.py`) that logs
 usage and cost to `runs/usage.jsonl` and stops at `MAX_SPEND_USD`.
 
 ## Stack and architecture
@@ -181,17 +181,18 @@ library in the same process and streams its events to the service:
 ```mermaid
 flowchart TB
     subgraph proc1["Process: portal :8080"]
-        portal["portal/<br/>simulated supplier, scenarios, order log"]
+        portal["app/sim/portal/<br/>simulated supplier, scenarios, order log"]
     end
     subgraph proc2["Process: interceptor service :8090"]
-        svc["interceptor/service.py<br/>/ui · /ws · /events · /api/*"]
+        svc["app/runtime/service/api.py<br/>/ui · /ws · /events · /api/*"]
         hub["EventHub<br/>last 500 events"]
         svc --- hub
     end
     subgraph proc3["Process: a run"]
-        loop["agent/loop.py"] --> eng["interceptor/<br/>channels, filter, engine"]
-        loop --> drv["agent/driver.py<br/>Playwright"]
-        loop --> rec["receipts/"]
+        loop["app/runtime/loop/loop.py"] --> eng["app/core/decision/<br/>filter, engine"]
+        eng --> ch["app/adapters/meta/channels.py<br/>Spark + SAM"]
+        loop --> drv["app/adapters/browser/driver.py<br/>Playwright"]
+        loop --> rec["app/core/evidence/"]
         loop -->|HttpSink POST /events| svc
     end
     drv --> portal
@@ -201,18 +202,26 @@ flowchart TB
 
 | Folder | What lives there |
 | --- | --- |
-| `common/` | config, clock, the single Meta API client |
-| `portal/` | Crestline Wholesale: two-step order (review, confirm), editable delivery address, scenarios, banners |
-| `agent/` | agent, browser driver, the supervised loop |
-| `interceptor/` | pixel and code channels, instruction filter, decision engine, policy, events, event hub, service |
-| `policy/` | the owner's signed policy and its compiler |
-| `approval/` | spoken total and destination matching for the approval |
-| `receipts/` | receipt building, Ed25519 keys, `testigo verify` |
-| `ui/` | the live interface: landing, guided demo, results (`flow.js`) and the presenter views (`app.js`) |
+| `app/core/policy/` | the owner's signed policy (`larkspur.policy.yaml`), its model and hash (`model.py`), and its compiler from a spoken mandate (`compile.py`) |
+| `app/core/decision/` | decision engine, instruction filter, sensitive-action rule, events, the regions it requires |
+| `app/runtime/guard.py` | `check_screen` for any agent: the engine with the real pixel channel |
+| `app/core/evidence/` | receipt building, Ed25519 keys, the run's signed bundle |
+| `app/core/approvals/` | the approval desk and spoken total and destination matching |
+| `app/adapters/meta/` | the single Meta API client and the pixel channel (Spark + SAM) |
+| `app/adapters/browser/` | the Playwright driver |
+| `app/runtime/loop/` | Wonder, the supervised loop, approvers, `run.py` |
+| `app/runtime/service/` | the FastAPI service (`api.py`), event hub, event sink |
+| `app/runtime/ui/` | the live interface: landing, guided demo, results (`flow.js`) and the presenter views (`app.js`) |
+| `app/runtime/mcp/` | TESTIGO+ as an MCP server |
+| `app/security/verifier/` | `testigo verify` (checks and CLI) |
+| `app/sim/portal/` | Crestline Wholesale: two-step order (review, confirm), editable delivery address, scenarios, banners |
+| `app/common/` | config, money, addresses, clock |
 | `examples/` | a valid receipt (`clean`) and one whose address changed after approval (`a3`, named before A3 was hardened) with their crops |
+| `bench/`, `results/` | WitnessBench and its committed results |
 | `gate/` | gate checks against the real models |
 | `scripts/` | `up`, `doctor`, `check_secrets` |
-| `tests/` | cross-module tests and offline demos |
+| `tests/` | cross-module tests, the security matrix and offline demos |
+| `site/` | the static landing |
 | `docs/specs/` | the design specs (Spanish) |
 
 ## Run it
@@ -339,6 +348,106 @@ is hard to fool on its own: with the hardened attacks it fell for the forged
 address in 3 of 5 runs once and in 0 of 5 the next time. TESTIGO+ does not
 depend on that: it held all 15 attacks from the screen and the signed policy.
 
+## Architecture
+
+Since Nov 1 the code lives under `app/`, ordered by layers
+([`docs/specs/09-estructura-por-capas.md`](docs/specs/09-estructura-por-capas.md)
+has the map from the old folders). The move changed where files live, not what
+they do.
+
+```mermaid
+flowchart TB
+    subgraph runtime["app/runtime"]
+        loop["loop<br/>Wonder + supervised loop"]
+        service["service<br/>API, events, approval"]
+        ui["ui"]
+        mcp["mcp"]
+    end
+    subgraph core["app/core"]
+        policy["policy"]
+        decision["decision"]
+        evidence["evidence"]
+        approvals["approvals"]
+    end
+    subgraph adapters["app/adapters"]
+        meta["meta<br/>client + channels"]
+        browser["browser<br/>driver"]
+    end
+    verifier["app/security/verifier<br/>testigo verify"]
+    portal["app/sim/portal<br/>simulated supplier + attacks"]
+    common["app/common<br/>config, money, address, clock"]
+    api(["Meta API<br/>Wonder, Spark, SAM 3.1, Voice"])
+    receipts[("runs/: receipt.json + crops")]
+
+    runtime --> core
+    runtime --> adapters
+    meta --> api
+    browser --> portal
+    evidence --> receipts
+    verifier -->|reads only| receipts
+```
+
+`app/common` sits under every layer and depends on none, so it has no arrows.
+`app/core` never calls a model or the browser: it receives what the adapters
+read, through any object with the pixel channel's interface. Core owns what
+it needs read and how sure it must be (`app/core/decision/regions.py`); the
+adapter imports that from core, never the other way. The runtime glue that
+wires a real pixel channel into the engine for any agent is
+`app/runtime/guard.py`. One known exception: the loop scores an outcome with
+the simulator's rule (`app.sim.portal.scenarios.is_attack_success`), for the
+benchmark only.
+
+| Layer | Folder | Rule |
+| --- | --- | --- |
+| Core | `app/core/` | Decides and proves: policy, decision engine, signed evidence, approval. Calls no model and no browser; works on what was read |
+| Adapters | `app/adapters/` | Talks to the outside: Meta client, pixel channel (Spark + SAM), Playwright. Every model reading of the screen is validated against a fixed schema here before it reaches the core (the spoken-mandate extraction is validated by its compiler in `app/core/policy/`) |
+| Runtime | `app/runtime/` | Runs things: agent loop, service (API, events, approval), interface, MCP server. Wires the layers; holds no security rule |
+| Security | `app/security/` | The independent verifier (`testigo verify`). Reads receipts and evidence only; does not depend on the runtime |
+| Simulation | `app/sim/` | The simulated portal with the attacks. A test environment, never part of the defence |
+| Common | `app/common/` | Config, money, addresses, clock. No dependency on other layers |
+
+Measurement (`bench/`, `gate/`, `results/`), cross-module tests (`tests/`),
+`examples/`, `scripts/`, the static landing (`site/`) and `docs/` stay outside
+`app/`. Each module's own tests sit next to it.
+
+### One order through the files
+
+1. **The rules.** `app/core/policy/compile.py` turns the spoken mandate into a
+   policy the owner signs; `app/core/policy/model.py` loads it (the committed
+   `app/core/policy/larkspur.policy.yaml`, or one signed in the interface),
+   with its sha256 and Ed25519 signature, the allowed destination and the
+   maximum per order.
+2. **The agent proposes.** `app/runtime/loop/loop.py` captures the screen
+   through `app/adapters/browser/driver.py` (Playwright), asks Wonder
+   (`app/runtime/loop/agent.py`) for one action, and holds it before the
+   browser runs it.
+3. **The screen is read.** For a click on a protected button, the pixel
+   channel in `app/adapters/meta/channels.py` finds the total, the address and
+   the button with SAM 3.1 and reads the crops with Spark; every call goes
+   through `app/adapters/meta/client.py`.
+4. **The code decides.** `app/core/decision/engine.py` compares the page code
+   with the pixels (through `instruction_filter.py`) and the pixels with the
+   policy: `cannot_verify`, `divergence` or `policy_violation` block; an order
+   that follows the rules needs approval.
+5. **A person approves.** `app/runtime/loop/approval.py` opens the approval in
+   `app/runtime/service/api.py` (`/api/approval/*`); the person reads the
+   total and the address aloud, and `app/core/approvals/desk.py` with
+   `voice_match.py` compares the transcript with what the pixels showed. Only
+   a match unlocks **Approve**.
+6. **Click and re-read.** The loop reads the review screen again before the
+   click, the driver clicks Confirm, and the loop reads the result screen and
+   compares it with what was approved (`Interceptor.reread` in the engine).
+7. **The receipt.** `app/core/evidence/bundle.py` builds the receipt
+   (`receipt.py`), signs it with the owner key (`keys.py`) and writes it with
+   its crops to `runs/<date>/<run>/`.
+8. **Anyone checks it.** `testigo verify` (`app/security/verifier/verify.py`)
+   rechecks the policy hash, the signature, the approved crops and what
+   executed, without importing anything from the runtime.
+
+The trust boundaries behind these steps are in
+[Security model](#security-model); `tests/security/test_matrix.py` tests them
+one by one.
+
 ## Security model
 
 TESTIGO+ is a research prototype, not a production control. This is what it
@@ -351,7 +460,7 @@ amount, after a person approved exactly what the screen showed.
 | Trusted | Not trusted |
 | --- | --- |
 | The owner's signed policy (Ed25519, checked by hash; an edited or unsigned one is never used, and never silently replaced by the committed one) | The agent: what it says, what it plans, its summary of the page |
-| The decision rules in code (`interceptor/engine.py`): the models extract, the code decides | The page code (DOM): it can hide text from the screen (A1) |
+| The decision rules in code (`app/core/decision/engine.py`): the models extract, the code decides | The page code (DOM): it can hide text from the screen (A1) |
 | The person's approval of the exact crops of the screen | The page's pixels on their own: they can carry text the code does not (A2) or an address the rules do not allow (A3), or change while the agent decides (A4) |
 | This machine: the owner key in `.secrets/`, the evidence in `runs/` | The models' answers: off-schema, unsure or failed reads are `cannot_verify`, never allowed |
 

@@ -152,7 +152,7 @@ function empty(title, sub) {
   return `<div class="empty"><div>${ICON.dot}<b>${esc(title)}</b>${esc(sub || "")}</div></div>`;
 }
 // Did the order go to an allowed delivery point? null without a policy. Strict,
-// as interceptor/policy.py address_allowed: anything else in the field
+// as app/core/policy/model.py address_allowed: anything else in the field
 // ("..., Unit 4, springfield", "(c/o Dock 9 Storage)") is another delivery point.
 function toAllowedAddress(address) {
   const rules = S.policy ? S.policy.deliver_only : [];
@@ -162,7 +162,7 @@ function toAllowedAddress(address) {
 // -- F8: compare by the values read from the pixels (receipts/receipt.py norm_read)
 // Real crops of unchanged content hash differently across captures, so view 6
 // never compares hashes when read values exist.
-// A street address in canonical form, as common/address.py does it (keep the
+// A street address in canonical form, as app/common/address.py does it (keep the
 // two in step; tests/test_ui.py checks they agree): house number (I/l/O misread
 // for 1/1/0, leading zeros dropped, an attached letter kept), an optional
 // directional (North/N ...), 1-3 name words, the street type and its
@@ -194,13 +194,13 @@ const ADDR_SRC = `(?<![\\p{L}\\p{N}_.,$#\\-])(?<num>${ADDR_NUM})(?<sfx>[A-Za-z])
 const ADDRESS_RE = new RegExp(ADDR_SRC, "gu");
 const ADDRESS_AT = new RegExp(ADDR_SRC, "uy");
 // C0/C1 controls other than \t \n \v \f \r, and the BOM, are dropped first
-// (common/address.py clean): then /\s/u and Python's str.isspace() agree.
+// (app/common/address.py clean): then /\s/u and Python's str.isspace() agree.
 const CONTROLS = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\ufeff]/gu;
 function clean(t) { return String(t == null ? "" : t).normalize("NFC").replace(CONTROLS, ""); }
 function fold(t) {
   return clean(t).normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
 }
-// The buyer's name (common/config.py BUYER): exactly that after an address is the
+// The buyer's name (app/common/config.py BUYER): exactly that after an address is the
 // label the portal shows next to the field, not part of the address.
 const BUYER_NAME = "Larkspur Market";
 const BUYER_WORDS = fold(BUYER_NAME).split(" ").map(w => w.replace(/\./g, ""));
@@ -225,7 +225,7 @@ function addrSegment(text, i) {
     i = j;
   }
 }
-// The words after an address that belong to it (common/address.py _tail):
+// The words after an address that belong to it (app/common/address.py _tail):
 // a complement and the word after it; a directional or a capitalized word; the
 // city skipped; the exact buyer name, or any other (lower-case) word, ends it.
 function addrTail(text, i) {
@@ -271,7 +271,7 @@ function addrMatches(text) {
 function canonicalAddresses(text) {
   return [...new Set(addrMatches(clean(text)).map(f => f[0]))].sort();
 }
-// The protected "Ship to" crop (common/address.py ship_to_address): its
+// The protected "Ship to" crop (app/common/address.py ship_to_address): its
 // addresses joined by ",", or null when anything but the label "Ship to", the
 // city and the destination's exact name is left besides separators.
 const SHIP_TO_LABEL = "ship to";
@@ -439,7 +439,7 @@ function crop(label, image, readText, hash, state, note, readUnder) {
          `<div class="px">${px}</div>${PLAIN ? "" : `<div class="hash">sha256 ${esc(short(hash))}</div>`}</div>`;
 }
 
-// view 1, live: record -> Voice -> policy/compile.py -> draft -> sign and use
+// view 1, live: record -> Voice -> app/core/policy/compile.py -> draft -> sign and use
 function ruleList(x) {
   return `<ul class="mrules">${x.deliver_only.map(d => `<li><span class="k">Ship only to</span> ${esc(d.name)} <span class="mono">· ${esc(d.address)}</span></li>`).join("")}
     <li><span class="k">Max per order</span> ${esc(usd(x.max_per_order_cents))}</li>
@@ -506,7 +506,7 @@ function zoom(r, frame, box, label) {
                 `background-position:${px}% ${py}%;aspect-ratio:${w} / ${h}`;
   return `<div class="zoom" role="img" aria-label="${esc(label)}" style="${style}"></div>`;
 }
-// view 3: what TESTIGO+ would have seen, computed once after the run (agent.run --explain)
+// view 3: what TESTIGO+ would have seen, computed once after the run (app.runtime.loop.run --explain)
 function explainPanel(r) {
   const x = r.explain;
   if (!x) return "";

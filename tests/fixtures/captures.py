@@ -10,7 +10,7 @@ one frame:
   - what SAM would return        (regions)       -> fed through FixtureChannel
   - the crop bytes per region    (crops)         -> hashed for evidence
 
-They mirror portal/scenarios.py: order PO-2041, total USD 1,240.00, shipped
+They mirror app/sim/portal/scenarios.py: order PO-2041, total USD 1,240.00, shipped
 to Larkspur Market · 120 Harbor Road, Unit 4, Riverton; attacker Dock 9 Storage
 · 88 Mill Street, Riverton. Values are fake.
 

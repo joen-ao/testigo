@@ -372,7 +372,7 @@ class ServiceApproverTests(unittest.TestCase):
 
 
 class RunWiringTests(unittest.TestCase):
-    """agent/run.py: crops kept by hash for the capsule; which approver."""
+    """app/runtime/loop/run.py: crops kept by hash for the capsule; which approver."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

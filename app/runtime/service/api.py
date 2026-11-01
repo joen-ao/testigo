@@ -3,7 +3,7 @@
   make up        # starts this on INTERCEPTOR_PORT, next to the portal
 
 Routes
-  /                  the interface (ui/index.html; static files under /ui)
+  /                  the interface (app/runtime/ui/index.html; static files under /ui)
   /status, /health   the F0 status page and its JSON
   POST /events       the loop posts each event here (loopback only)
   POST /events/reset forget the stored events before a new recording
@@ -11,7 +11,7 @@ Routes
   WS   /ws           history first, then every new event
   GET  /api/policy   the active signed policy (view 1; app.common.config.policy_path)
   POST /api/mandate/draft  a WAV of the mandate (base64 in JSON) -> Voice ->
-                     policy/compile.py -> an unsigned draft, or why it was refused
+                     app/core/policy/compile.py -> an unsigned draft, or why it was refused
   POST /api/mandate/discard {"id"}: forget that draft
   POST /api/mandate/sign   {"id"}: sign that draft with the owner key and make it
                      the active policy (RUNS_DIR/policy/active.policy.yaml)
@@ -29,7 +29,7 @@ Routes
   POST /api/run/cancel  stop that run (its process group) and deny its open approval
   GET  /runs/<path>  screenshots and crops (PNG/JPEG only) from runs/
 
-Approval (F7, view 5; see approval/desk.py)
+Approval (F7, view 5; see app/core/approvals/desk.py)
   POST /api/approval/open           the loop opens one approval (no browser Origin)
   GET  /api/approval                the open approval, for the page
   GET  /api/approval/<id>           one approval, polled by the loop
@@ -427,12 +427,12 @@ async def approval_decision(approval_id: str, request: Request):
 # -- mandate (F1 live, view 1) ------------------------------------------------
 #
 # The page records the owner saying the mandate, the service transcribes it
-# (Voice) and compiles it with policy/compile.py: the same rules as the
+# (Voice) and compiles it with app/core/policy/compile.py: the same rules as the
 # `app.core.policy.compile mandate` CLI (address from the buyer profile, negations,
 # millions refused). The draft stays here; "Sign and use" signs exactly that
 # draft with the owner key and writes it, atomically, to
 # RUNS_DIR/policy/active.policy.yaml, which config.policy_path() then serves to
-# every consumer. The committed policy/larkspur.policy.yaml is never written. A
+# every consumer. The committed app/core/policy/larkspur.policy.yaml is never written. A
 # refused mandate changes nothing.
 
 MAX_MANDATE_SECONDS = MAX_VOICE_SECONDS
@@ -843,7 +843,7 @@ RUN_KEYS = {"scenario", "variant", "supervised", "explain", "headed"}
 RUN_TAIL_LINES = 40
 RUN_STOP_TIMEOUT_S = 5
 RUN_PID_FILE = "ui-run.pid.json"       # under RUNS_DIR: a restarted service still sees the run
-# What the child needs besides the declared config variables (common/config.ENV_VARS).
+# What the child needs besides the declared config variables (app.common.config.ENV_VARS).
 CHILD_ENV = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TEMP", "TMP", "LANG",
              "LC_ALL", "LC_CTYPE", "TZ", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME",
              "PLAYWRIGHT_BROWSERS_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",

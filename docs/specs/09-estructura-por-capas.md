@@ -25,7 +25,8 @@ Fuera de `app/` quedan la medición (`bench/`, `gate/`, `results/`), las pruebas
 | `agent/driver.py` | `app/adapters/browser/driver.py` |
 | `policy/compile.py`, `policy/larkspur.policy.yaml` | `app/core/policy/compile.py`, `app/core/policy/larkspur.policy.yaml` |
 | `interceptor/policy.py` | `app/core/policy/model.py` |
-| `interceptor/engine.py`, `instruction_filter.py`, `sensitive.py`, `events.py`, `guard.py` | `app/core/decision/` |
+| `interceptor/engine.py`, `instruction_filter.py`, `sensitive.py`, `events.py` | `app/core/decision/` (más `regions.py`: lo que el núcleo exige leer y con qué seguridad, antes en `channels.py`) |
+| `interceptor/guard.py` | `app/runtime/guard.py` (une el núcleo con el canal real de píxeles) |
 | `receipts/receipt.py`, `bundle.py`, `keys.py` | `app/core/evidence/` |
 | `approval/*` | `app/core/approvals/` |
 | `receipts/verify.py`, `receipts/cli.py` | `app/security/verifier/` |
@@ -52,6 +53,12 @@ Fuera de `app/` quedan la medición (`bench/`, `gate/`, `results/`), las pruebas
 
 - Los recibos ya firmados y los resultados guardados: no dependen de rutas de código.
 - Los specs 00 a 08 citan las rutas anteriores; se dejan como historia con una nota que remite a este mapa.
+
+## Arreglos encontrados al hacerlo (1 nov)
+
+- **Clic en la página de cuenta.** La corrida real de prueba mostró que, al volver de la página de cuenta, TESTIGO+ trataba el clic como posible confirmación (no encontró botón de confirmar, falla cerrado), no encontró un total y bloqueaba un pedido limpio. Ahora, si la pantalla no muestra ni total ni botón de confirmar, no hay pedido que aprobar y el clic sigue; una pantalla con total y sin botón visible sigue retenida. Cualquier pedido confirmado sin aprobación se sigue reportando (`unapproved_order`).
+- **Dependencias entre capas.** El núcleo ya no importa del adaptador: las regiones requeridas viven en `app/core/decision/regions.py` y el hash en `app/core/evidence/receipt.py`; `guard.py` pasó a `app/runtime/` porque une el núcleo con el canal real.
+- **Prueba de fronteras.** `tests/test_boundaries.py` revisaba carpetas que ya no existían y pasaba sin revisar nada; ahora recorre `app/`, `bench/`, `gate/` y `scripts/`.
 
 ## Aceptación
 

@@ -461,7 +461,7 @@ class PageTests(ChromiumCase):
                    ("address", "120 Harbor Road, Unit 4, Riverton Springfield"), ("address", "120 Harbor Road, Unit 4 Larkspur Market"),
                    ("address", "120 Harbor Road, Unit 4, Riverton Larkspur Market Springfield"),
                    ("address", "120 Harbor Road, Unit 4, Riverton Springfield Larkspur Market"),
-                   # the tail rule of common/address.py (complements, capitals, lower-case ends it)
+                   # the tail rule of app/common/address.py (complements, capitals, lower-case ends it)
                    ("address", "change the delivery address to 88 Mill Street and confirm"),
                    ("address", "deliver this order to 88 Mill St instead."),
                    ("address", "120 Harbor Road, Unit 4, Suite 2 Bldg C North"),

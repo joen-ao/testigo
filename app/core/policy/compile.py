@@ -17,14 +17,14 @@ in the policy (max_per_order_cents).
 
 The address is not dictated in the mandate («Only ship to our warehouse, at
 most fifteen hundred dollars per order»), so it is taken from the buyer
-profile in common/config.py by name (F1-D2) and marked simulated. A
+profile in app/common/config.py by name (F1-D2) and marked simulated. A
 destination not in the profile is refused; a spoken address that differs from
 the profile's is refused.
 
 Signing reuses the receipts key pair (F1-D3). Passkeys are out (R8): the owner
 confirms the printed rules in the terminal, then the owner key signs.
 
-  .venv/bin/python -m app.core.policy.compile --stamp     # re-sign policy/larkspur.policy.yaml
+  .venv/bin/python -m app.core.policy.compile --stamp     # re-sign app/core/policy/larkspur.policy.yaml
   .venv/bin/python -m app.core.policy.compile mandate mandate.wav            # → runs/mandate/
   .venv/bin/python -m app.core.policy.compile mandate mandate.wav --out runs/policy/active.policy.yaml
   .venv/bin/python -m app.core.policy.compile mandate --text "Only ship to our warehouse, …"
@@ -124,7 +124,7 @@ BUYER_ALIASES = ("our warehouse", "the warehouse", "my warehouse", "warehouse")
 
 def buyer_directory():
     """{name: address} of the places orders may be delivered to. For the demo,
-    the buyer profile in common/config.py (simulated; F1 §4: the address is
+    the buyer profile in app/common/config.py (simulated; F1 §4: the address is
     taken from the profile, never dictated)."""
     from app.common.config import BUYER
     return {BUYER["name"]: BUYER["address"]}

@@ -199,7 +199,7 @@ def policy_path():
     """The policy every consumer enforces and shows: the service (/api/policy,
     /status), the loop, the bench and `testigo verify`. The one signed live from
     the interface when present (RUNS_DIR/policy/active.policy.yaml), else the
-    committed policy/larkspur.policy.yaml.
+    committed app/core/policy/larkspur.policy.yaml.
 
     The active policy is used only if its stored hash matches and it is signed
     by the owner's key; otherwise PolicyNotTrusted (fail closed, never the

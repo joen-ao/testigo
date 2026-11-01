@@ -10,6 +10,7 @@ executed, so cost and latency grow only on the steps that matter.
 """
 
 BUTTONS = ("confirm button", "order button")
+NO_BUTTON = "no confirm button found on this screen"   # the loop recognises this reason
 
 
 # SAM also marks other buttons as the one asked for (it marked "Add order items"
@@ -63,7 +64,7 @@ class SamButtons:
                     return self._label_says_confirm(capture, b["box"], phrase)
         if not any_button:
             # No confirm button found at all: a restyled page could hide it. In doubt, check.
-            return True, "no confirm button found on this screen"
+            return True, NO_BUTTON
         return False, ""
 
     def _label_says_confirm(self, capture, box, phrase):

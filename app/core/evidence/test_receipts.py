@@ -1,6 +1,6 @@
 """Tests for receipts: Ed25519, signing, and the four verify checks.
 
-  make test   (or: .venv/bin/python -m pytest receipts)
+  make test   (or: .venv/bin/python -m pytest app/core/evidence app/security/verifier)
 """
 
 import contextlib
@@ -224,7 +224,7 @@ class ExamplesTests(unittest.TestCase):
         pub = (EXAMPLES / "pubkey.txt").read_text().strip()
         code, out, _ = _run_cli("verify", str(EXAMPLES / "clean/receipt.json"), "--pubkey", pub)
         self.assertEqual(code, 0, out)
-        self.assertIn("policy/larkspur.policy.yaml", out)
+        self.assertIn("app/core/policy/larkspur.policy.yaml", out)
         code, out, _ = _run_cli("verify", str(EXAMPLES / "a3/receipt.json"), "--pubkey", pub)
         self.assertEqual(code, 1, out)
         self.assertIn("[1/4] \u2713", out)
@@ -608,7 +608,7 @@ class ReadNormalizationTests(unittest.TestCase):
 
     def test_only_ascii_digits(self):
         # review of cebf0f4: Python's \d also takes other scripts' digits, the
-        # ui/app.js port does not
+        # app/runtime/ui/app.js port does not
         self.assertEqual(norm_read("address", "١٢٠ Harbor Road"), "١٢٠harborroad")
         self.assertIsNone(norm_read("amount", "USD ١٢٤٠.00"))
         self.assertIsNone(norm_read("amount", "USD ١٢٤٠"))

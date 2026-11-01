@@ -2,6 +2,8 @@
 
 Documentos de diseño del proyecto. Se escriben antes del código y el código los sigue.
 
+> **Nota (1 nov).** Since 1 Nov the code lives under `app/` by layers (spec 09); paths in the specs before 09 use the old names — see the map in `09-estructura-por-capas.md`.
+
 > Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
 
 | Archivo | Qué es |

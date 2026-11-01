@@ -95,7 +95,7 @@ def build_parser():
     v.add_argument("--evidence", help="folder with the crop PNGs (auto-detected next to the receipt)")
     v.add_argument("--policy", default=None,
                    help="default: the active policy (RUNS_DIR/%s if signed from the "
-                        "interface, else policy/larkspur.policy.yaml)" % config.ACTIVE_POLICY)
+                        "interface, else app/core/policy/larkspur.policy.yaml)" % config.ACTIVE_POLICY)
     v.add_argument("--pubkey", help="pin the signer's public key (hex)")
     v.set_defaults(func=cmd_verify)
 

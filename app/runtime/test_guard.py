@@ -1,10 +1,10 @@
-"""Spec 07 M9: the one-call check any agent can use (app.core.decision.guard), with
+"""Spec 07 M9: the one-call check any agent can use (app.runtime.guard), with
 the fixture pixel channel (no models)."""
 
 import unittest
 
 from app.adapters.meta.channels import FixtureChannel
-from app.core.decision.guard import check_screen, policy_summary
+from app.runtime.guard import check_screen, policy_summary
 from tests.fixtures import captures as fx
 
 PNG = b"\x89PNG\r\n\x1a\nnot-a-real-image"
