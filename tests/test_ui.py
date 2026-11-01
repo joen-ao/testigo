@@ -67,6 +67,21 @@ class ServiceUITests(unittest.TestCase):
         self.assertEqual(self.c.get("/ui/app.css").status_code, 200)
         self.assertIn("TESTIGO+ interceptor", self.c.get("/status").text)
 
+    def test_interface_uses_only_the_landing_tokens(self):
+        """Spec 06: the dark/paper/teal/cobalt/amber identity; no red, no old palette;
+        keyframes move only transform and opacity; reduced motion turns them off."""
+        import re
+        css = self.c.get("/ui/app.css").text
+        for gone in ("#A32020", "#FF8B8B", "#F9E3E3", "#104281", "#2A78D6", "#FAFAF8", "--bad:"):
+            self.assertNotIn(gone.lower(), css.lower())
+        for token in ("--ink: #0B0F14", "--paper: #F2EFE8", "--teal: #3CC9A9", "--cobalt: #4A7BE0", "--amber: #F0B254"):
+            self.assertIn(token, css)
+        for name, body in re.findall(r"@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}", css):
+            props = set(re.findall(r"([a-z-]+)\s*:", body))
+            self.assertLessEqual(props, {"transform", "opacity"}, name)
+        self.assertIn("prefers-reduced-motion: reduce", css)
+        self.assertIn("/ui/landing.js", self.c.get("/").text)
+
     def test_post_then_history(self):
         r = self.c.post("/events", json=check_event())
         self.assertEqual(r.status_code, 200)
@@ -290,7 +305,9 @@ class ChromiumCase(unittest.TestCase):
         (self.tmp / "bench_results.json").unlink(missing_ok=True)
         self.page = self.browser.new_page(viewport={"width": 1440, "height": 900})
         self.errors = []
-        self.page.on("console", lambda m: m.type == "error" and self.errors.append(m.text))
+        # the web fonts come from Google Fonts: offline, their failure is not a page error
+        self.page.on("console", lambda m: m.type == "error" and "fonts.g" not in (m.location or {}).get("url", "")
+                     and self.errors.append(m.text))
         self.page.on("pageerror", lambda e: self.errors.append(str(e)))
 
     def tearDown(self):
@@ -499,7 +516,7 @@ class PageTests(ChromiumCase):
         t = self.text()
         for want in ("Ship only to", "Larkspur Market", "120 Harbor Road, Unit 4, Riverton",
                      "Max per order", "USD 1,500.00", "new address", "Signed policy"):
-            self.assertIn(want, t)
+            self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
         for gone in ("Pay", "account", "Nequi"):
             self.assertNotIn(gone, t)
 
@@ -556,7 +573,7 @@ class PageTests(ChromiumCase):
         t = self.page.inner_text("#mlive")
         for want in ("Draft from your voice", "not signed", "at most one thousand dollars", "USD 1,000.00",
                      "Signed policy in use now", "USD 1,500.00", "Larkspur Market"):
-            self.assertIn(want, t)
+            self.assertIn(want.lower(), t.lower())          # some labels are set in upper case by CSS
         self.assertFalse(active.exists())
         self.page.click("#msign")
         self.page.wait_for_selector("#mlive .mdone")
@@ -644,7 +661,7 @@ class PageTests(ChromiumCase):
                      "1 blocked", "cannot_verify", "1 never reached the confirmation",
                      "delivered, flagged after", "Orders delivered to the attacker", "3 runs failed and are left out", "Wonder refused 12 attacks on its own", "Known limits",
                      "blurred banner"):
-            self.assertIn(want, t)
+            self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
         self.assertNotIn("%", t)
 
 
@@ -699,32 +716,39 @@ class FlowPageTests(ChromiumCase):
 
     def test_landing_shows_old_results_as_not_measured(self):
         # the committed 31 Oct results are from the earlier scenario: history only
-        self.open("#/", ".dark-note")
+        self.open("#/", "#lp-pending")
         t = self.main()
-        for want in ("Your agent can be tricked. The screen can’t lie.", "Three ways a page fools an agent",
-                     "How it works", "Not measured yet in this scenario",
+        for want in ("Your agent can be fooled.", "The screen can’t.", "Agents read things", "Trust the screen",
+                     "Don’t trust us.", "Measured with", "The limits,", "Re-running with the current scenario",
                      "is from an earlier scenario and is kept as history"):
             self.assertIn(want, t)
-        for old in ("9 of 10", "0 of 15", "on 31 Oct", "Doña", "Bogot", "COP", "pesos", "shop"):
+        for old in ("9 of 10", "0/15", "on 31 Oct", "Doña", "Bogot", "COP", "pesos", "shop"):
             self.assertNotIn(old, t)
         self.assertIn("Larkspur Market", t)
+        self.assertEqual(self.page.locator(".figs.pending-figs").count(), 1)
+        # the approved landing's bar: section capsule with its pill, Code, Try the demo
+        self.assertEqual(self.page.locator("#links a").count(), 6)
+        self.assertEqual(self.page.get_attribute("#nav-try", "href"), "#/demo/rules")
+        self.assertEqual(self.page.get_attribute("#start-demo", "href"), "#/demo/rules")
 
     def test_landing_reads_the_results_of_this_scenario(self):
         self.current_copy_of_the_committed_results()
-        self.open("#/", ".dark-card")
+        self.open("#/", ".figs:not(.pending-figs)")
         t = self.main()
-        for want in ("9 of 10", "stopped before Confirm", "0 of 15",
-                     "Muse Wonder resisted every attack on its own", "1 of 5",
-                     "paused for a human", "15 s median per check", "on 31 Oct"):
+        for want in ("0/15", "orders shipped to the attacker without TESTIGO+", "1/5",
+                     "held for a person", "about 15 s per check", "Muse Wonder resisted every attack",
+                     "Measured on 31 Oct"):
             self.assertIn(want, t)
         self.assertNotIn("%", t)
-        self.assertIn("simulation only", self.page.inner_text("footer"))
-        self.assertEqual(self.page.get_attribute(".hero .btn-primary", "href"), "#/demo/rules")
+        self.assertNotIn("Re-running", t)
+        self.assertIn("Simulation only", self.page.inner_text("footer"))
+        self.assertEqual(self.page.get_attribute("#hero-try", "href"), "#/demo/rules")
         # the presenter is not linked from the site
         self.assertEqual(self.page.locator('a[href^="#/present"]').count(), 0)
-        self.page.click(".hero .btn-primary")
+        self.page.click("#hero-try")
         self.page.wait_for_selector(".stepper")
         self.assertIn("#/demo/rules", self.page.url)
+        self.assertEqual(self.page.locator("#links").count(), 0)      # the progress replaces the capsule
 
     def test_landing_numbers_come_from_the_file_not_the_page(self):
         import json
@@ -737,26 +761,41 @@ class FlowPageTests(ChromiumCase):
         (self.tmp / "bench_results.json").write_text(json.dumps({"summary": summary, "rows": rows,
                                                                  "scenario": CURRENT,
                                                                  "generated": "2026-11-02T10:00:00-05:00"}))
-        self.open("#/", ".dark-card")
+        self.open("#/", ".figs:not(.pending-figs)")
         t = self.main()
-        for want in ("4 of 6", "1 of 15", "against 4 of 15 without it", "2 of 5",
-                     "stopped although nothing was wrong", "9 s median per check", "on 2 Nov"):
+        for want in ("4/15", "1/15", "2/5", "about 9 s per check", "on 2 Nov", "about 9 s in our runs"):
             self.assertIn(want, t)
-        self.assertNotIn("9 of 10", t)
+        self.assertNotIn("resisted every attack", t)
+
+    def test_landing_section_links_move_the_pill_and_scroll(self):
+        self.open("#/", "#lp")
+        self.page.click("#nav-proof")
+        self.page.wait_for_function("document.getElementById('nav-proof').classList.contains('active')")
+        self.assertIn("#/proof", self.page.url)
+        self.assertEqual(self.page.evaluate("getComputedStyle(document.querySelector('#links .pill')).opacity"), "1")
+        self.page.wait_for_selector("#topnav.scrolled")
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        self.page.click("#menuBtn")
+        self.page.wait_for_selector("#links.open")
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_selector("#links:not(.open)", state="attached")
+        self.no_sideways_scroll()
 
     def test_results_page_table(self):
-        self.open("#/results", ".light-note")
+        self.open("#/results", ".bench-note")
         self.assertIn("Not measured yet in this scenario", self.main())
+        self.assertIn("Re-running with the current scenario", self.main())
         self.current_copy_of_the_committed_results()
         self.open("#/results", ".rtable")
         t = self.main()
-        for want in ("WitnessBench results", "9 of 10", "0 of 15", "Hidden order in the page code",
+        for want in ("WitnessBench results", "9 of 10", "0/15", "1/5", "Hidden order in the page code",
                      "Reached the attacker", "Stopped by TESTIGO+", "Agent stopped on its own"):
-            self.assertIn(want, t)
+            self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
         a1_with = self.page.locator(".rtable tbody tr").nth(3).inner_text()
         self.assertIn("With TESTIGO+", a1_with)
         self.assertIn("0 of 5", a1_with)
         self.assertIn("5", a1_with.split("0 of 5")[1])        # 5 stopped by TESTIGO+
+        self.assertEqual(self.page.get_attribute("#nav-bench", "aria-current"), "true")
         self.open("#/results", ".rtable", width=375)
         self.no_sideways_scroll()
 
@@ -764,16 +803,22 @@ class FlowPageTests(ChromiumCase):
     def test_step_1_rules_in_plain_words(self):
         self.open("#/demo/rules", ".rules-list")
         t = self.main()
-        for want in ("Your rules", "Ship only to Larkspur Market", "120 Harbor Road, Unit 4, Riverton",
-                     "At most USD 1,500.00 per order", "Ask you before shipping to a new address",
-                     "Use these rules", "Record new rules"):
-            self.assertIn(want, t)
-        for jargon in ("sha256", "F8", "cannot_verify", "SAM", "divergence"):
+        for want in ("Step 1 of 4", "Your rules", "Purchasing rules", "Larkspur Market", "120 Harbor Road, Unit 4, Riverton",
+                     "USD 1,500.00", "shipping to a new address", "Use these rules", "Record new rules"):
+            self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
+        rules = self.page.inner_text(".policy-doc")
+        for label in ("SHIP ONLY TO", "MAX PER ORDER", "ASK BEFORE"):
+            self.assertIn(label, rules.upper())
+        # the seal of the signed document (spec 06): "Signed · sha256 …"
+        self.assertIn("Signed · sha256", self.page.inner_text(".doc-seal"))
+        for jargon in ("F8", "cannot_verify", "SAM", "divergence"):
             self.assertNotIn(jargon, t)
         self.assertEqual(self.page.get_attribute(".stepper [aria-current=step]", "href"), "#/demo/rules")
         self.page.click("#showmandate")
         self.page.wait_for_selector("#mlive #mrec")
         self.assertEqual(self.page.get_attribute("#showmandate", "aria-expanded"), "true")
+        self.assertEqual(self.page.locator(".stepper li.current").count(), 1)
+        self.assertEqual(self.page.locator(".btn-primary:visible").count(), 1)      # one main action
         self.page.click("#userules")
         self.page.wait_for_selector("#runform")
         self.assertIn("#/demo/run", self.page.url)
@@ -782,8 +827,11 @@ class FlowPageTests(ChromiumCase):
     def test_step_2_starts_a_run_and_step_3_watches_it(self):
         self.open("#/demo/run", "#runform")
         self.assertEqual(self.page.locator("input[name=situation]").count(), 4)
+        self.assertEqual(self.page.locator(".pick .thumb .specimen").count(), 4)    # threat thumbnails
         self.assertTrue(self.page.is_checked("#protect"))
+        self.assertEqual(self.page.locator(".protect.on").count(), 1)
         self.page.check("input[name=situation][value=a2]")
+        self.page.wait_for_selector(".pick.on #sit-a2")
         self.page.click("#runbtn")
         self.page.wait_for_selector(".status-line")
         self.assertIn("#/demo/watch", self.page.url)
@@ -841,6 +889,9 @@ class FlowPageTests(ChromiumCase):
         self.assertIn("TESTIGO+ needs you", self.main())
         self.assertIn("needs you", self.page.inner_text("#announce"))
         self.assertNotIn("sha256", self.page.inner_text(".needs-you"))
+        self.assertIn("ship to Larkspur Market", self.page.inner_text(".needs-you .say"))
+        self.assertEqual(self.page.locator(".needs-you .crop").count(), 2)
+        self.assertEqual(self.page.locator(".needs-you .wave").count(), 1)
         self.page.click("#vapprove")
         self.page.wait_for_function("() => document.querySelector('#vapprove') && document.querySelector('#vapprove').disabled")
         self.assertEqual(service.desk.current()["decision"], "approve")
@@ -873,8 +924,11 @@ class FlowPageTests(ChromiumCase):
         self.open("#/demo/result", ".outcome-card")
         t = self.main()
         self.assertIn("Blocked: the address changed after you approved", t)
-        self.assertIn("Without TESTIGO+, same situation:", t)
-        self.assertIn("Delivered to the attacker", self.page.inner_text(".compare"))
+        cmp = self.page.inner_text(".compare")
+        self.assertEqual(self.page.locator(".compare .chip").count(), 2)
+        self.assertIn("Without TESTIGO+", cmp)
+        self.assertIn("Delivered to the attacker", cmp)
+        self.assertEqual(self.page.locator(".outcome-card.bad").count(), 1)       # held = amber
         self.page.click("#res-after summary")
         self.page.wait_for_selector("#res-after .crop.diff")
         self.assertIn("88 Mill Street", self.page.inner_text("#res-after .crop.diff"))
@@ -883,7 +937,7 @@ class FlowPageTests(ChromiumCase):
 
     def test_step_4_unprotected_attacker_and_agent_stopped_on_its_own(self):
         self.events(ev.run_started("no_supervisor", "a1"), ev.order_confirmed(4, "88 Mill Street", 124000))
-        self.open("#/demo/result", ".outcome-card")
+        self.open("#/demo/result", ".outcome-card.lost")
         self.assertIn("Delivered to the attacker", self.main())
         self.assertIn("Run it with TESTIGO+", self.main())
         service.hub.reset()
@@ -906,6 +960,8 @@ class FlowPageTests(ChromiumCase):
                     ev.receipt_signed("r-clean", "ed25519:abc", path="clean/receipt.json"))
         self.open("#/demo/result", "#verifybtn")
         self.assertIn("Delivered to your warehouse", self.main())
+        self.assertEqual(self.page.locator(".outcome-card.ok").count(), 1)
+        self.assertIn("testigo verify runs/clean/receipt.json", self.page.inner_text(".receipt-paper .vterm"))
         self.page.click("#verifybtn")
         self.page.wait_for_selector(".verify-res.ok", timeout=20000)
         self.assertIn("Valid: the signature and the evidence match", self.main())
@@ -975,7 +1031,7 @@ class FlowPageTests(ChromiumCase):
         self.assertEqual(self.page.locator(".compare").count(), 0)
         self.events(ev.run_started("no_supervisor", "a1", 1), ev.order_confirmed(4, "88 Mill Street", 124000))
         self.open("#/demo/result", ".compare")                # now the unprotected v1 run is on screen
-        self.assertIn("With TESTIGO+, same situation", self.page.inner_text(".compare"))
+        self.assertIn("With TESTIGO+", self.page.inner_text(".compare"))
 
     def test_an_incomplete_local_bench_never_replaces_the_landing_numbers(self):
         import json
@@ -985,15 +1041,15 @@ class FlowPageTests(ChromiumCase):
         (self.tmp / "bench_results.json").write_text(json.dumps(
             {"summary": summary, "rows": [], "complete": False, "missing": ["a2 v1", "a3 v2"],
              "scenario": CURRENT}))
-        self.open("#/", ".dark-note")
+        self.open("#/", "#lp-pending")
         # the committed results are the complete ones, but from the earlier scenario
-        self.assertIn("Not measured yet in this scenario", self.main())
-        self.assertNotIn("2 of 3", self.main())
-        self.open("#/results", ".light-card")
+        self.assertIn("Re-running with the current scenario", self.main())
+        self.assertNotIn("2/3", self.main())
+        self.open("#/results", ".figs:not(.pending-figs)")
         t = self.main()
         self.assertIn("This benchmark run is incomplete", t)
         self.assertIn("2 configurations are missing", t)
-        self.assertIn("0 of 3", t)
+        self.assertIn("0/3", t)
 
     def test_presenter_still_reachable(self):
         self.open("#/present/0")

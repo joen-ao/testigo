@@ -531,6 +531,10 @@ function approvalCapsule() {
     const d = deskFor(a), voice = d && d.voice;
     const img = Object.assign({}, (d && d.images) || {}, a.images || {});
     const rec = S.rec.state;
+    // the run is waiting for this person. Once the run's answer for this approval
+    // arrives (e.g. denied on timeout even if its closing POST failed and the
+    // service still shows the approval pending), nothing is offered any more.
+    const open = !g && !!d && !d.decision;
     // the loop's answer when it exists; before that, the service's record
     let state = "wait";
     if (g) state = isGranted(g) ? "approved" : (g.voice_match ? "refused" : "nomatch");
@@ -548,6 +552,7 @@ function approvalCapsule() {
         : chip("warn", ICON.pause, "Waiting for voice"),
     }[state];
     const transcript = g ? g.voice_transcript : (voice && rec === "idle" ? voice.transcript : "");
+    const sayName = (voice && voice.address_name) || ((S.policy && S.policy.deliver_only && S.policy.deliver_only[0]) || {}).name || BUYER_NAME;
     const waitText = rec === "recording" ? "Listening… press Stop when done."
       : rec === "sending" ? "Sending to Voice Transcribe…" : rec === "starting" ? "Waiting for the browser to hand over the microphone…"
       : d ? "Press Record and read the total and the destination aloud." : "No voice yet.";
@@ -563,10 +568,6 @@ function approvalCapsule() {
       if (!voice.address_match) lines.push(`Destination “${esc(voice.address_name)}” not heard`);
       diff = `<div class="vdiff">${lines.map(l => `<div>${ICON.stop}<span>${l}</span></div>`).join("")}</div>`;
     }
-    // the run is waiting for this person. Once the run's answer for this approval
-    // arrives (e.g. denied on timeout even if its closing POST failed and the
-    // service still shows the approval pending), nothing is offered any more.
-    const open = !g && !!d && !d.decision;
     const busy = rec !== "idle" || S.deskBusy;
     let controls = "";
     if (open) {
@@ -596,7 +597,8 @@ function approvalCapsule() {
         ${crop("Ship to", img.address, a.address, a.crops.address)}
       </div>
       <div class="voice">
-        <div class="head">${ICON.mic} ${PLAIN ? "Read the total and the address aloud" : "Read aloud to confirm"} ${vchip}</div>
+        <div class="head">${ICON.mic}<span>${PLAIN ? "Read the total and the address aloud" : "Read aloud to confirm"}</span>${vchip}</div>
+        ${open ? `<p class="say">For example: <q>${esc(usd(a.amount_cents))}, ship to ${esc(sayName)}</q></p>` : ""}
         ${wave(rec === "recording" ? "live" : (state === "match" || done ? "" : "idle"))}
         ${heard}${diff}${controls}${err}
       </div>
@@ -973,7 +975,7 @@ async function runVerify() {
   try { got = await getJSON("/api/verify?path=" + encodeURIComponent(S.receipt.path), { method: "POST" }); }
   catch (err) { got = { output: "error: " + err.message, exit_code: 1 }; }
   S.verifying = false;
-  if (seq === S.loadSeq) S.verify = got;     // only for the receipt still on screen
+  if (seq === S.loadSeq) { S.verify = got; S.verifyAt = Date.now(); }   // only for the receipt still on screen
   draw();
 }
 
