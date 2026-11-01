@@ -70,7 +70,7 @@ class SamButtons:
     def _label_says_confirm(self, capture, box, phrase):
         if self.read is None:
             return True, "click on %s" % phrase
-        from app.adapters.meta.channels import crop
+        from app.common.images import crop
         try:
             label = self.read(crop(capture.screenshot, box))
         except Exception as e:  # noqa: BLE001 - in doubt, check

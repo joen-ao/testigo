@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app.adapters.meta.client import image_content
 
 from app.core.decision.regions import CONFIDENCE_MIN, REQUIRED_REGIONS  # noqa: E402,F401 - owned by core
+from app.common.images import clamp, crop  # noqa: E402,F401 - pure image helpers, shared with core
 
 
 def sha_crop(data):
@@ -343,13 +344,6 @@ def png_size(png):
         return im.size
 
 
-def clamp(box, w, h):
-    x1, y1, x2, y2 = [int(v) for v in box]
-    x1, x2 = sorted((max(0, min(w, x1)), max(0, min(w, x2))))
-    y1, y2 = sorted((max(0, min(h, y1)), max(0, min(h, y2))))
-    return [x1, y1, x2, y2]
-
-
 def union(a, b):
     return [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
 
@@ -389,19 +383,3 @@ def tiles_2x(png, overlap=40):
     """Four overlapping quarters of the capture, each enlarged 2x, as PNG."""
     w, h = png_size(png)
     return [tile_2x(png, box) for box in tile_boxes(w, h, overlap)]
-
-
-def crop(png, box, pad=4):
-    """The PNG cut to `box` (plus `pad` pixels), as PNG bytes (R7).
-
-    Deterministic: the same pixels give the same bytes, so the sha256 of a crop
-    is stable and two captures of an unchanged region hash the same (F8, F9)."""
-    from PIL import Image
-    with Image.open(io.BytesIO(png)) as im:
-        w, h = im.size
-        x1, y1, x2, y2 = clamp(box, w, h)
-        region = im.convert("RGB").crop((max(0, x1 - pad), max(0, y1 - pad),
-                                         min(w, x2 + pad), min(h, y2 + pad)))
-        buf = io.BytesIO()
-        region.save(buf, format="PNG", optimize=False)
-        return buf.getvalue()

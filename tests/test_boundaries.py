@@ -3,7 +3,8 @@
 1. Only app/adapters/meta/client.py creates an API client, and only it and
    app/common/config.py touch META_API_KEY (scripts/check_secrets.py names it to
    look for leaks).
-2. No product module imports test data from tests/. Unit tests (test_*.py)
+2. No product module imports test data from tests/.
+3. Nothing in app/core imports app/adapters, app/runtime or app/sim (spec 10). Unit tests (test_*.py)
    next to the code may, product code may not.
 """
 
@@ -25,7 +26,18 @@ def product_files():
             yield p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")
 
 
+# The core never reaches out (spec 10 P1). One allowed exception: the mandate
+# compiler's command line builds the Meta client it then hands to the core.
+CORE_OUTWARD_ALLOWED = {"app/core/policy/compile.py"}
+
+
 class BoundaryTests(unittest.TestCase):
+    def test_core_imports_no_outer_layer(self):
+        pat = re.compile(r"^\s*(from|import)\s+app\.(adapters|runtime|sim)\b", re.MULTILINE)
+        bad = [rel for rel, text in product_files()
+               if rel.startswith("app/core/") and rel not in CORE_OUTWARD_ALLOWED and pat.search(text)]
+        self.assertEqual(bad, [])
+
     def test_single_api_client(self):
         bad = [rel for rel, text in product_files()
                if re.search(r"\bOpenAI\s*\(", text) and rel not in CLIENT_ALLOWED]

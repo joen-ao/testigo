@@ -248,7 +248,7 @@ def verify_receipt(receipt_path, evidence_dir=None,
     want = receipt.get("policy_sha256")
     if policy_path:
         try:
-            pol = load_policy(policy_path)
+            pol = load_policy(policy_path, validate=False)   # its hash is what is compared
             ok1 = pol.sha256() == want
             d1 = "matches signed policy %s…%s" % (pol.sha256()[:6], pol.sha256()[-4:]) if ok1 \
                 else "receipt policy hash does not match %s" % config.runs_label(policy_path)

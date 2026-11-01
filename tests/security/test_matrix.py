@@ -286,6 +286,23 @@ class PolicyNotTrusted(unittest.TestCase):
         with self.assertRaises(config.PolicyNotTrusted):
             config.trusted_signed_policy(self.path, pubkey=self.pub)
 
+    def test_signed_but_malformed_is_not(self):
+        # spec 10 P2: a valid signature on a malformed policy (a negative maximum)
+        # still never reaches enforcement
+        import yaml
+        from app.core.policy.compile import HEADER, to_yaml
+        from app.core.policy.model import Policy
+        data = yaml.safe_load(self.path.read_text())
+        data["rules"] = [r for r in data["rules"] if "max_per_order_cents" not in r] + [{"max_per_order_cents": -1}]
+        data.pop("sha256"); data.pop("signature")
+        p = Policy(data)
+        p.stamp_hash()
+        p.sign(self.seed)
+        self.path.write_text(HEADER + to_yaml(p.to_dict()))
+        with self.assertRaises(config.PolicyNotTrusted) as e:
+            config.trusted_signed_policy(self.path, pubkey=self.pub)
+        self.assertIn("not well formed", str(e.exception))
+
     def test_signed_by_someone_else_is_not(self):
         with self.assertRaises(config.PolicyNotTrusted):
             config.trusted_signed_policy(self.path, pubkey=keys.public_from_seed(keys.generate_seed()))

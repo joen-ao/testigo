@@ -123,13 +123,22 @@ class Policy:
 # Loading
 # --------------------------------------------------------------------------
 
-def load(path):
+def load(path, validate=True):
+    """The policy in `path`. With validate (the default, for anything that
+    enforces it) a malformed policy raises schema.PolicyInvalid (spec 10 P2).
+    Looking an old policy up by hash for a receipt passes validate=False: its
+    hash and signature are what matter there."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
     if path.suffix == ".json":
-        return Policy(json.loads(text))
-    import yaml
-    return Policy(yaml.safe_load(text))
+        data = json.loads(text)
+    else:
+        import yaml
+        data = yaml.safe_load(text)
+    if validate:
+        from app.core.policy.schema import check
+        check(data)
+    return Policy(data)
 
 
 def _merge_rules(rule_list):

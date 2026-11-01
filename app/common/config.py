@@ -156,8 +156,13 @@ def trusted_signed_policy(path, pubkey=None, want_sha=None):
     from app.core.policy.model import load
     label = runs_label(path)
     try:
-        pol = load(path)
-    except Exception as e:  # noqa: BLE001 - unreadable is untrusted
+        # enforcing it (no want_sha): it must also be well formed (spec 10 P2);
+        # looking an older one up by hash for a receipt: hash and signature only
+        pol = load(path, validate=want_sha is None)
+    except Exception as e:  # noqa: BLE001 - unreadable or malformed is untrusted
+        from app.core.policy.schema import PolicyInvalid
+        if isinstance(e, PolicyInvalid):
+            raise PolicyNotTrusted("%s is not well formed: %s" % (label, e))
         raise PolicyNotTrusted("%s cannot be read (%s)" % (label, type(e).__name__))
     if not pol.hash_matches_stored():
         raise PolicyNotTrusted("%s: its stored sha256 does not match its content" % label)
@@ -178,7 +183,7 @@ def archive_policy(path):
     import tempfile
     from app.core.policy.model import load
     data = Path(path).read_bytes()
-    dest = archived_policy_path(load(path).sha256())
+    dest = archived_policy_path(load(path, validate=False).sha256())
     if dest.is_file() and dest.read_bytes() == data:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -226,7 +231,7 @@ def find_policy_by_hash(sha256, pubkey=None):
     errors = []
     for path in (archived_policy_path(sha256), active_policy_path()):
         try:
-            if load(path).sha256() != sha256:
+            if load(path, validate=False).sha256() != sha256:
                 continue                   # the active policy is another one
         except Exception:  # noqa: BLE001 - missing or unreadable: not this one
             if not path.is_file():

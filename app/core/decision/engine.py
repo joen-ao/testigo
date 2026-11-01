@@ -2,8 +2,10 @@
 
 Nothing the agent proposes reaches the page without passing through `check`.
 The rules run in order; the first that fires decides. This is the piece the
-whole demo turns on, so it is kept pure: it takes a Capture and a PixelChannel,
-returns events, and talks to no browser, model or network itself.
+whole demo turns on, so it is kept pure (spec 10 P1): `decide` and
+`compare_reread` take a Reading (what was read) and return events; they talk
+to no browser, model, network or file. `Interceptor` only wires a pixel
+channel in front of them.
 
 Rules (spec order):
   1. SAM cannot find amount, address or the confirm button with confidence
@@ -49,7 +51,114 @@ class Decision:
         return not self.blocked and not self.needs_approval
 
 
+class Reading:
+    """What was read from one screen: plain data, no behaviour (spec 10 P1).
+
+    regions         the pixel channel's labelled regions (text, box, confidence)
+    code_lines      every text line in the page code, rendered or not
+    rendered_lines  every line painted on screen, as the pixel channel read it
+    crops           label -> crop bytes (their sha256 is the evidence)
+    frame           which capture this is
+    """
+
+    __slots__ = ("frame", "regions", "code_lines", "rendered_lines", "crops")
+
+    def __init__(self, frame, regions, code_lines=(), rendered_lines=(), crops=None):
+        self.frame = frame
+        self.regions = list(regions or [])
+        self.code_lines = list(code_lines)
+        self.rendered_lines = list(rendered_lines)
+        self.crops = dict(crops or {})
+
+
+def read_screen(pixel_channel, capture):
+    """The adapter side: ask the pixel channel to read a capture and return the
+    Reading the pure functions below decide on. The only call out of the core,
+    and it goes through whatever channel the caller wired in."""
+    regions = pixel_channel.read_regions(capture)
+    return Reading(capture.frame, regions, capture.code_lines, capture.rendered_lines, capture.crops)
+
+
+def decide(policy, action, reading, latency_ms=None, confidence_min=CONFIDENCE_MIN):
+    """Rules 1-4 on what was read (spec 10 P1). Pure: no model, browser,
+    network or file. `action` is {"kind": "confirm"|"click"|...}."""
+    regions, frame = reading.regions, reading.frame
+    by_label = {r["label"]: r for r in regions}
+
+    def done(status, blocked, reason="", code_only=(), pixels_only=()):
+        return Decision(status, blocked,
+                        ev.check_result(frame, status, regions, list(code_only), list(pixels_only),
+                                        latency_ms, reason),
+                        reason=reason)
+
+    # Rule 1: cannot_verify
+    missing, low = confidence_gaps(by_label, confidence_min)
+    if missing or low:
+        return done(ev.CANNOT_VERIFY, True, _cannot_reason(missing, low, confidence_min))
+
+    # Rule 1b: the amount must read as exactly one amount (app.core.evidence.receipt
+    # _amount_cents); an odd separator or a second number is not guessed.
+    if _amount_from(by_label["amount"]["text"]) is None:
+        return done(ev.CANNOT_VERIFY, True,
+                    "the amount on screen is not one readable amount: %r" % by_label["amount"]["text"])
+
+    # Rule 2: divergence (both directions)
+    code_only, pixels_only = divergence(reading.code_lines, reading.rendered_lines)
+    if code_only or pixels_only:
+        reason = "visible text not in page code" if pixels_only else "page code text not visible"
+        return done(ev.DIVERGENCE, True, reason, code_only, pixels_only)
+
+    # Rule 3a: an address the policy does not allow is painted on the screen
+    # (a decoy next to the real field, review of F4). The pixels decide.
+    stray = stray_addresses(policy, reading.rendered_lines)
+    if stray:
+        return done(ev.POLICY_VIOLATION, True,
+                    "an address not in the deliver-only list is on screen: %s" % ", ".join(stray))
+
+    # Rule 3: policy violation (address/amount read from pixels)
+    address_text = by_label["address"]["text"]
+    amount_cents = _amount_from(by_label["amount"]["text"])
+    ok, why = policy.check_order(address_text, amount_cents)
+    if not ok:
+        return done(ev.POLICY_VIOLATION, True, why)
+
+    # Rule 4: ok. Confirming the order needs approval; anything else is allowed.
+    check_ev = ev.check_result(frame, ev.OK, regions, [], [], latency_ms, "")
+    if _is_confirm(action):
+        approval = ev.approval_requested(
+            frame, amount_cents, address_text,
+            sha_crop(reading.crops.get("amount", b"")), sha_crop(reading.crops.get("address", b"")))
+        return Decision(ev.OK, False, check_ev, approval_event=approval, needs_approval=True)
+    return Decision(ev.OK, False, check_ev)
+
+
+def compare_reread(approved_read, approved_hashes, reading, moment, confidence_min=CONFIDENCE_MIN):
+    """F8 on what was read again, before or after the click (spec 10 P1, pure).
+
+    Compared by the values read from the pixels (app.core.evidence.receipt.norm_read:
+    the amount's digits, the canonical delivery addresses), because crops of
+    unchanged content never hash the same across two real captures. The
+    hashes travel along as evidence. Returns (verify.result event, read)."""
+    from app.core.evidence.receipt import norm_read
+    by = {r["label"]: r for r in reading.regions}
+    read = {n: by[n]["text"] for n in ("amount", "address")
+            if n in by and by[n].get("confidence", 0) >= confidence_min}
+    executed = {n: sha_crop(reading.crops[n]) for n in ("amount", "address") if reading.crops.get(n)}
+    if any(norm_read(n, approved_read.get(n)) != norm_read(n, read[n]) for n in read):
+        status = ev.MISMATCH           # any field read and different: proven
+    elif len(read) < 2:
+        status = ev.CANNOT_VERIFY      # what was read agrees, but not everything was
+    else:
+        status = ev.MATCH
+    return ev.verify_result(reading.frame, status, dict(approved_hashes), executed,
+                            moment=moment,
+                            read={"approved": dict(approved_read), "executed": read}), read
+
+
 class Interceptor:
+    """The core with a pixel channel wired in: each method reads the screen
+    through the channel (read_screen) and hands the Reading to a pure function."""
+
     def __init__(self, policy, pixel_channel, confidence_min=CONFIDENCE_MIN):
         self.policy = policy
         self.pixels = pixel_channel
@@ -61,78 +170,11 @@ class Interceptor:
     def check(self, action, capture, latency_ms=None):
         """Decide on a proposed action. `action` is {"kind": "confirm"|"click"|"type", ...}."""
         t0 = time.perf_counter()
-        regions = self.pixels.read_regions(capture)
-        self.last_regions = regions
-        by_label = {r["label"]: r for r in regions}
+        reading = read_screen(self.pixels, capture)
+        self.last_regions = reading.regions
         measured = int(round((time.perf_counter() - t0) * 1000))
-        lat = latency_ms if latency_ms is not None else measured
-
-        # Rule 1: cannot_verify
-        missing, low = self._confidence_gaps(by_label)
-        if missing or low:
-            reason = _cannot_reason(missing, low, self.confidence_min)
-            return Decision(
-                ev.CANNOT_VERIFY, True,
-                ev.check_result(capture.frame, ev.CANNOT_VERIFY, regions, [], [], lat, reason),
-                reason=reason,
-            )
-
-        # Rule 1b: the amount must read as exactly one amount (app.core.evidence.receipt
-        # _amount_cents); an odd separator or a second number is not guessed.
-        if _amount_from(by_label["amount"]["text"]) is None:
-            reason = "the amount on screen is not one readable amount: %r" % by_label["amount"]["text"]
-            return Decision(
-                ev.CANNOT_VERIFY, True,
-                ev.check_result(capture.frame, ev.CANNOT_VERIFY, regions, [], [], lat, reason),
-                reason=reason,
-            )
-
-        # Rule 2: divergence (both directions)
-        code_only, pixels_only = self._divergence(capture)
-        if code_only or pixels_only:
-            if pixels_only:
-                reason = "visible text not in page code"
-            else:
-                reason = "page code text not visible"
-            return Decision(
-                ev.DIVERGENCE, True,
-                ev.check_result(capture.frame, ev.DIVERGENCE, regions,
-                                code_only, pixels_only, lat, reason),
-                reason=reason,
-            )
-
-        # Rule 3a: an address the policy does not allow is painted on the screen
-        # (a decoy next to the real field, review of F4). The pixels decide.
-        stray = self._stray_addresses(capture.rendered_lines)
-        if stray:
-            why = "an address not in the deliver-only list is on screen: %s" % ", ".join(stray)
-            return Decision(
-                ev.POLICY_VIOLATION, True,
-                ev.check_result(capture.frame, ev.POLICY_VIOLATION, regions, [], [], lat, why),
-                reason=why,
-            )
-
-        # Rule 3: policy violation (address/amount read from pixels)
-        address_text = by_label["address"]["text"]
-        amount_cents = _amount_from(by_label["amount"]["text"])
-        ok, why = self.policy.check_order(address_text, amount_cents)
-        if not ok:
-            return Decision(
-                ev.POLICY_VIOLATION, True,
-                ev.check_result(capture.frame, ev.POLICY_VIOLATION, regions, [], [], lat, why),
-                reason=why,
-            )
-
-        # Rule 4: ok. Confirming the order needs approval; anything else is allowed.
-        check_ev = ev.check_result(capture.frame, ev.OK, regions, [], [], lat, "")
-        if _is_confirm(action):
-            crop_amt = sha_crop(capture.crops.get("amount", b""))
-            crop_rec = sha_crop(capture.crops.get("address", b""))
-            approval = ev.approval_requested(
-                capture.frame, amount_cents, address_text, crop_amt, crop_rec)
-            return Decision(ev.OK, False, check_ev, approval_event=approval,
-                            needs_approval=True)
-        return Decision(ev.OK, False, check_ev)
+        return decide(self.policy, action, reading,
+                      latency_ms if latency_ms is not None else measured, self.confidence_min)
 
     # -- after the click ----------------------------------------------------
 
@@ -153,28 +195,11 @@ class Interceptor:
         return ev.verify_result(executed_capture.frame, status, dict(approved_crops), executed)
 
     def reread(self, approved_read, approved_hashes, capture, moment):
-        """F8: read amount and address again and compare with what was approved.
-
-        Compared by the values read from the pixels (app.core.evidence.receipt.norm_read:
-        the amount's digits, the canonical delivery addresses), because crops of
-        unchanged content never hash the same across two real captures. The
-        hashes travel along as evidence. Returns (verify.result event, read)."""
-        from app.core.evidence.receipt import norm_read
-        self.last_regions = self.pixels.read_regions(capture)
-        by = {r["label"]: r for r in self.last_regions}
-        read = {n: by[n]["text"] for n in ("amount", "address")
-                if n in by and by[n].get("confidence", 0) >= self.confidence_min}
-        executed = {n: sha_crop(capture.crops[n]) for n in ("amount", "address")
-                    if capture.crops.get(n)}
-        if any(norm_read(n, approved_read.get(n)) != norm_read(n, read[n]) for n in read):
-            status = ev.MISMATCH           # any field read and different: proven
-        elif len(read) < 2:
-            status = ev.CANNOT_VERIFY      # what was read agrees, but not everything was
-        else:
-            status = ev.MATCH
-        return ev.verify_result(capture.frame, status, dict(approved_hashes), executed,
-                                moment=moment,
-                                read={"approved": dict(approved_read), "executed": read}), read
+        """F8: read amount and address again (through the channel) and compare
+        with what was approved (compare_reread)."""
+        reading = read_screen(self.pixels, capture)
+        self.last_regions = reading.regions
+        return compare_reread(approved_read, approved_hashes, reading, moment, self.confidence_min)
 
     # -- explanation, after an unsupervised run (observe only) ---------------
 
@@ -186,12 +211,12 @@ class Interceptor:
         the instruction-like lines on each side and the addresses on screen that
         the policy does not allow."""
         t0 = time.perf_counter()
-        regions = self.pixels.read_regions(capture)
+        reading = read_screen(self.pixels, capture)
         latency = int(round((time.perf_counter() - t0) * 1000))
-        code_only, pixels_only = self._divergence(capture)
-        by_label = {r["label"]: r for r in regions}
+        code_only, pixels_only = divergence(reading.code_lines, reading.rendered_lines)
+        by_label = {r["label"]: r for r in reading.regions}
         policy_reason = ""
-        stray = self._stray_addresses(capture.rendered_lines)
+        stray = stray_addresses(self.policy, reading.rendered_lines)
         if stray:
             policy_reason = "an address not in the deliver-only list is on screen: %s" % ", ".join(stray)
         elif "address" in by_label and "amount" in by_label:
@@ -201,38 +226,45 @@ class Interceptor:
             else:
                 ok, why = self.policy.check_order(by_label["address"]["text"], amount)
                 policy_reason = "" if ok else why
-        return {"regions": regions, "code_only_text": code_only, "pixels_only_text": pixels_only,
+        return {"regions": reading.regions, "code_only_text": code_only, "pixels_only_text": pixels_only,
                 "policy_reason": policy_reason, "latency_ms": latency}
 
-    # -- helpers ------------------------------------------------------------
-
     def _stray_addresses(self, lines):
-        from app.core.evidence.receipt import ADDRESS_RE, norm_read
-        allowed = self.policy.allowed_addresses()
-        seen = []
-        for line in lines:
-            if not ADDRESS_RE.search(str(line)):
-                continue
-            for addr in norm_read("address", line).split(","):
-                if addr and addr not in allowed and addr not in seen:
-                    seen.append(addr)
-        return seen
+        return stray_addresses(self.policy, lines)
 
-    def _confidence_gaps(self, by_label):
-        missing = [r for r in REQUIRED_REGIONS if r not in by_label]
-        low = [r for r in REQUIRED_REGIONS
-               if r in by_label and by_label[r].get("confidence", 0) < self.confidence_min]
-        return missing, low
 
-    def _divergence(self, capture):
-        """Differences in both directions, kept only where they look like an
-        instruction for the agent (F5). Legitimate hidden text does not block."""
-        code = _compact_all(capture.code_lines)
-        pixels = _compact_all(capture.rendered_lines)
-        code_only = [x for x in capture.code_lines if not _covered(x, pixels)]
-        pixels_only = [x for x in capture.rendered_lines if not _covered(x, code)]
-        return (filter_instructions(_dedupe(code_only)),
-                filter_instructions(_dedupe(pixels_only)))
+# -- the rules' pieces (pure) -------------------------------------------------
+
+def stray_addresses(policy, lines):
+    """Addresses painted on screen that the policy does not allow."""
+    from app.core.evidence.receipt import ADDRESS_RE, norm_read
+    allowed = policy.allowed_addresses()
+    seen = []
+    for line in lines:
+        if not ADDRESS_RE.search(str(line)):
+            continue
+        for addr in norm_read("address", line).split(","):
+            if addr and addr not in allowed and addr not in seen:
+                seen.append(addr)
+    return seen
+
+
+def confidence_gaps(by_label, confidence_min=CONFIDENCE_MIN):
+    missing = [r for r in REQUIRED_REGIONS if r not in by_label]
+    low = [r for r in REQUIRED_REGIONS
+           if r in by_label and by_label[r].get("confidence", 0) < confidence_min]
+    return missing, low
+
+
+def divergence(code_lines, rendered_lines):
+    """Differences in both directions, kept only where they look like an
+    instruction for the agent (F5). Legitimate hidden text does not block."""
+    code = _compact_all(code_lines)
+    pixels = _compact_all(rendered_lines)
+    code_only = [x for x in code_lines if not _covered(x, pixels)]
+    pixels_only = [x for x in rendered_lines if not _covered(x, code)]
+    return (filter_instructions(_dedupe(code_only)),
+            filter_instructions(_dedupe(pixels_only)))
 
 
 def _compact(s):

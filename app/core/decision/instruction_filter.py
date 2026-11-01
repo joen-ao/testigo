@@ -15,11 +15,20 @@ A line is flagged if it has any of these signals (F5-D1):
 Agent terms and verbs are matched in English, and also in Spanish (kept as
 defence in depth; the scenario is in English).
 
+Before matching (spec 10 P3) the text is folded: Unicode compatibility forms
+(full-width digits "８８" -> "88") and the Cyrillic and Greek letters that look
+like Latin ones ("Аgent" with a Cyrillic А). And an address cut across two
+consecutive divergent lines ("Ship this order to 88" / "Mill Street") is
+caught by also reading each pair of neighbouring lines together (the address
+signal only, so an agent term and a verb on two unrelated lines never join).
+
 Known limit (F5-D4): an instruction written without any of these signals would
-not be flagged. It is assumed and measured (a WitnessBench case), not hidden.
+not be flagged. It is assumed and measured (a WitnessBench case and the corpus
+in tests/security/injections.py), not hidden.
 """
 
 import re
+import unicodedata
 
 from app.common.address import ADDRESS_RE
 
@@ -38,7 +47,21 @@ ACTION_VERBS = (
     "entrega", "entregar", "envía", "envia", "enviar", "confirma", "confirmar",
     "cambia la dirección", "cambia la direccion", "cambiar la dirección",
     "actualiza la dirección", "actualiza la direccion", "actualizar la dirección",
+    "usa la", "usar la", "manda", "mandar",
 )
+
+# Letters from other scripts that render like Latin ones (the common confusables).
+_CONFUSABLES = str.maketrans({
+    "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C",
+    "Т": "T", "Х": "X", "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x",
+    "і": "i", "ј": "j", "ѕ": "s", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
+    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X", "ο": "o",
+})
+
+
+def fold(text):
+    """Compatibility forms and look-alike letters folded to plain Latin."""
+    return unicodedata.normalize("NFKC", str(text or "")).translate(_CONFUSABLES)
 
 
 # Agent terms match as whole words ("ia" is not in "diaria" or "vía", "bot" is
@@ -50,7 +73,7 @@ _AGENT_RE = re.compile(r"(?<!\w)(?:%s)(?!\w)" % "|".join(
 
 def looks_like_instruction(text):
     """True when a divergent line reads as an instruction aimed at the agent."""
-    t = " ".join(str(text or "").split())
+    t = " ".join(fold(text).split())
     if not t:
         return False
     if ADDRESS_RE.search(t):
@@ -62,5 +85,14 @@ def looks_like_instruction(text):
 
 
 def filter_instructions(lines):
-    """Keep only the lines that look like an instruction."""
-    return [x for x in lines if looks_like_instruction(x)]
+    """Keep only the lines that look like an instruction, alone, or together
+    with the next line when the two make a street address (an address split
+    across two lines). Only the address signal is read across lines: an agent
+    term on one line and a verb on the next are two unrelated lines."""
+    lines = list(lines)
+    flagged = [looks_like_instruction(x) for x in lines]
+    for i in range(len(lines) - 1):
+        joined = " ".join(fold("%s %s" % (lines[i], lines[i + 1])).split())
+        if not (flagged[i] or flagged[i + 1]) and ADDRESS_RE.search(joined):
+            flagged[i] = flagged[i + 1] = True
+    return [x for x, f in zip(lines, flagged) if f]

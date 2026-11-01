@@ -321,3 +321,48 @@ class DecoyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class PureCoreTests(unittest.TestCase):
+    """Spec 10 P1: the rules run on plain data, with no channel at all."""
+
+    def reading(self, address=None, extra_code=()):
+        from tests.fixtures import captures as fx
+        from app.core.decision.engine import Reading
+        c = fx.capture_clean()
+        regions = fx._regions(address=address) if address else fx._regions()
+        return Reading(c.frame, regions, list(c.code_lines) + list(extra_code), c.rendered_lines, c.crops)
+
+    def test_decide_on_a_reading(self):
+        from app.core.decision.engine import decide
+        from app.core.policy.model import load as load_policy
+        from app.common.config import POLICY_PATH
+        pol = load_policy(POLICY_PATH)
+        d = decide(pol, {"kind": "confirm"}, self.reading(), latency_ms=7)
+        self.assertTrue(d.needs_approval)
+        self.assertEqual(d.check_event["latency_ms"], 7)
+        from tests.fixtures import captures as fx
+        self.assertEqual(decide(pol, {"kind": "confirm"}, self.reading(address=fx.A3)).status, ev.POLICY_VIOLATION)
+        self.assertEqual(decide(pol, {"kind": "confirm"}, self.reading(extra_code=[fx.INJECT])).status, ev.DIVERGENCE)
+
+    def test_compare_reread_on_a_reading(self):
+        from app.core.decision.engine import compare_reread
+        from tests.fixtures import captures as fx
+        approved = {"amount": "USD 1,240.00", "address": fx.BUYER}
+        e, _ = compare_reread(approved, {}, self.reading(), "review")
+        self.assertEqual(e["status"], ev.MATCH)
+        e, _ = compare_reread(approved, {}, self.reading(address=fx.A3), "review")
+        self.assertEqual(e["status"], ev.MISMATCH)
+
+    def test_the_wrapper_and_the_pure_function_agree(self):
+        from app.adapters.meta.channels import FixtureChannel
+        from app.core.decision.engine import decide, read_screen
+        from tests.fixtures import captures as fx
+        ch = FixtureChannel()
+        ch.set_regions(150, fx._regions())
+        from app.common.config import POLICY_PATH
+        pol = load(POLICY_PATH)
+        via = Interceptor(pol, ch).check({"kind": "confirm"}, fx.capture_clean(), latency_ms=3)
+        pure = decide(pol, {"kind": "confirm"}, read_screen(ch, fx.capture_clean()), latency_ms=3)
+        self.assertEqual(via.check_event, pure.check_event)
+        self.assertEqual(via.approval_event["crops"], pure.approval_event["crops"])

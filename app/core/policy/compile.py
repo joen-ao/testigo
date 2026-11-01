@@ -103,6 +103,8 @@ def build_policy_dict(transcript, deliver_only, max_per_order_cents, ask_before,
 
 def sign_policy_dict(policy_dict, seed):
     """Stamp the sha256 and Ed25519 signature into the dict; return (dict, Policy)."""
+    from app.core.policy.schema import check
+    check(policy_dict)                 # spec 10 P2: never sign a malformed policy
     p = Policy(dict(policy_dict))
     p.stamp_hash()
     p.sign(seed)

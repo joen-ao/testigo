@@ -425,10 +425,12 @@ Measurement (`bench/`, `gate/`, `results/`), cross-module tests (`tests/`),
    channel in `app/adapters/meta/channels.py` finds the total, the address and
    the button with SAM 3.1 and reads the crops with Spark; every call goes
    through `app/adapters/meta/client.py`.
-4. **The code decides.** `app/core/decision/engine.py` compares the page code
-   with the pixels (through `instruction_filter.py`) and the pixels with the
-   policy: `cannot_verify`, `divergence` or `policy_violation` block; an order
-   that follows the rules needs approval.
+4. **The code decides.** `decide()` in `app/core/decision/engine.py` takes
+   what was read (a `Reading`: regions, page-code lines, painted lines, crops)
+   and makes no call of its own: no model, browser, network or file. It
+   compares the page code with the pixels (through `instruction_filter.py`) and
+   the pixels with the policy: `cannot_verify`, `divergence` or
+   `policy_violation` block; an order that follows the rules needs approval.
 5. **A person approves.** `app/runtime/loop/approval.py` opens the approval in
    `app/runtime/service/api.py` (`/api/approval/*`); the person reads the
    total and the address aloud, and `app/core/approvals/desk.py` with
@@ -459,7 +461,7 @@ amount, after a person approved exactly what the screen showed.
 
 | Trusted | Not trusted |
 | --- | --- |
-| The owner's signed policy (Ed25519, checked by hash; an edited or unsigned one is never used, and never silently replaced by the committed one) | The agent: what it says, what it plans, its summary of the page |
+| The owner's signed policy (Ed25519, checked by hash and against a fixed schema; an edited, unsigned or malformed one is never used, and never silently replaced by the committed one) | The agent: what it says, what it plans, its summary of the page |
 | The decision rules in code (`app/core/decision/engine.py`): the models extract, the code decides | The page code (DOM): it can hide text from the screen (A1) |
 | The person's approval of the exact crops of the screen | The page's pixels on their own: they can carry text the code does not (A2) or an address the rules do not allow (A3), or change while the agent decides (A4) |
 | This machine: the owner key in `.secrets/`, the evidence in `runs/` | The models' answers: off-schema, unsure or failed reads are `cannot_verify`, never allowed |
@@ -475,8 +477,14 @@ crop or screenshot breaks its hash.
 - The decision depends on what Spark and SAM 3.1 read. A misread is caught
   only when two reads disagree or the region is unsure; a consistent misread
   is not.
-- The instruction filter is a heuristic. An instruction written only in words,
-  with no address, slips past it (`a1edge`, measured apart).
+- The instruction filter is a heuristic. Against our corpus of hard
+  injections (`tests/security/injections.py`, no models) it catches **14 of
+  18**: notices, tables, look-alike characters (Cyrillic letters, full-width
+  digits), Spanish, and an address split across two lines; it flags none of
+  the legitimate lines. It misses the 4 that carry neither an address in
+  figures nor a word addressed to the agent ("Larkspur's new receiving unit is
+  Dock 9 Storage", the address in words). Those, like `a1edge` in the
+  benchmark, are left to the policy check on the pixels and to the person.
 - We designed the attacks ourselves, on a simulated portal. A real site can
   behave in ways this benchmark did not foresee.
 - The owner key and the evidence are files on this machine. Whoever controls
@@ -485,8 +493,10 @@ crop or screenshot breaks its hash.
 - The browser is not sandboxed beyond Playwright's defaults, and the voice
   confirms intent, not identity (no passkey in this prototype).
 
-The rules above are tested one by one in `tests/security/test_matrix.py`
-(no models).
+The rules above are tested one by one in `tests/security/test_matrix.py`,
+the corpus in `tests/security/test_injection_corpus.py` and the layer
+boundaries (nothing in `app/core` imports an adapter, the runtime or the
+simulator) in `tests/test_boundaries.py`, all without models.
 
 ## Rules we keep
 
