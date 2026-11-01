@@ -157,6 +157,9 @@ function outcome(r) {
         ? "The screen showed text that is not in the page code, an order aimed at the agent. TESTIGO+ stopped before Confirm. Nothing was ordered."
         : "The page code carried text you could not see on screen, an order aimed at the agent. TESTIGO+ stopped before Confirm. Nothing was ordered." };
   }
+  if (sup && lastStep(r, l => /^stopped: the screen kept changing/.test(l))) return { kind: "blocked", cls: "bad", icon: ICON.stop,
+    title: "Blocked: the screen kept changing while it was checked",
+    text: "Twice the total or the address on screen changed between TESTIGO+’s check and the click, so it never clicked. Nothing was ordered." };
   const vo = verifyOutcome(r);
   if (sup && vo.kind === "blocked") return { kind: "blocked", cls: "bad", icon: ICON.stop,
     title: "Blocked: the address changed after you approved",
@@ -228,6 +231,7 @@ function plainText(e, r) {
       if (l === "proposed: done") return [ICON.user, "info", "The agent says it is finished."];
       if (/^stopped: max_steps/.test(l)) return [ICON.dot, "warn", "The agent ran out of steps."];
       if (/^sensitive/.test(l)) return [ICON.eye, "info", "This click would confirm the order. Checking the screen first."];
+      if (/^stopped: the screen kept changing/.test(l)) return [ICON.stop, "bad", "Stopped: the screen kept changing while TESTIGO+ checked it. No click."];
       if (/^screen changed while checking/.test(l)) return [ICON.warn, "warn", "The screen changed while TESTIGO+ was checking it, so the click was not made. The agent looks again."];
       if (/without a check or approval/.test(l)) return [ICON.warn, "lost", "The order was confirmed with nobody checking it."];
       if (/^receipt not/.test(l)) return [ICON.warn, "warn", "The receipt could not be signed on this machine."];

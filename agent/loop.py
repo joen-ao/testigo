@@ -36,6 +36,13 @@ from portal.scenarios import is_attack_success
 
 FIXTURE_LATENCY_MS = 1400  # shown for test doubles only; real runs report the measured read (F4)
 MAX_STEPS = 15
+MAX_CHANGED_WHILE_CHECKING = 2  # then stop: a page that never holds still is not clicked
+# How much of a checked region may differ at the click and still be the same
+# screen (spec 07, review): rendering noise moves a few pixels; another
+# address or total repaints a whole line of text.
+CHANGED_DELTA = 48              # a pixel counts as changed when a channel moves more than this
+CHANGED_SHARE = 0.01            # ... and the region changed when more than 1 % of it did
+CHANGED_MIN_PIXELS = 12
 
 
 class Outcome:
@@ -110,6 +117,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
         interceptor = Interceptor(policy, driver.pixel_channel())
 
     obs = None
+    changed_while_checking = 0
     approved = None            # once the person approves: what they saw (F7) and its evidence
     for _ in range(max_steps):
         obs = driver.observe()
@@ -179,7 +187,15 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                 and not _unchanged_since_check(driver, obs, interceptor.last_regions, out):
             # Spec 07 M3, review: the check takes seconds; a page that changed
             # meanwhile is not clicked. The agent looks again, and the next
-            # sensitive click is checked against what the person approved.
+            # sensitive click is checked against what the person approved. A page
+            # that keeps changing under every check is stopped, never clicked.
+            changed_while_checking += 1
+            if changed_while_checking >= MAX_CHANGED_WHILE_CHECKING:
+                out.blocked = True
+                out.blocked_at = "review" if approved is not None else "check"
+                out.emit(ev.agent_step(out.last_capture.frame,
+                                       "stopped: the screen kept changing while it was checked"))
+                return out
             agent.result(action, "not executed: the screen changed while it was being checked; look again")
             continue
 
@@ -223,22 +239,47 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
 
 def _unchanged_since_check(driver, checked, regions, out):
     """Capture once more right before the click: the amount and address regions
-    must be the same pixels the check read (crops of the same boxes, byte for
-    byte). With no boxes, the whole screenshot must be the same."""
-    from interceptor.channels import crop
+    must show what the check read. Compared pixel by pixel with a small
+    tolerance (`region_changed`), so rendering noise does not stop a click but
+    another address or total does. With no boxes, the whole screen is compared."""
     if not getattr(checked, "screenshot", b""):
         return True                        # nothing to compare (no screenshot)
     now = driver.observe()
     out.last_capture = now
     out.emit(ev.frame_captured(now.frame, now.sha(), image=getattr(now, "image", None)))
     boxes = [r["box"] for r in regions or [] if r.get("label") in ("amount", "address") and r.get("box")]
-    if len(boxes) < 2:
-        same = now.screenshot == checked.screenshot
-    else:
-        same = all(crop(now.screenshot, b) == crop(checked.screenshot, b) for b in boxes)
+    same = not any(region_changed(checked.screenshot, now.screenshot, b) for b in (boxes if len(boxes) >= 2 else [None]))
     if not same:
         out.emit(ev.agent_step(now.frame, "screen changed while checking: not clicked"))
     return same
+
+
+def region_changed(before_png, after_png, box=None):
+    """True when the region `box` (None: the whole screen) of two screenshots
+    differs by more than rendering noise: more than CHANGED_SHARE of its pixels
+    (and at least CHANGED_MIN_PIXELS) moved by more than CHANGED_DELTA in a
+    channel. Different sizes or unreadable images count as changed."""
+    import io
+    from PIL import Image, ImageChops
+    try:
+        with Image.open(io.BytesIO(before_png)) as a, Image.open(io.BytesIO(after_png)) as b:
+            if a.size != b.size:
+                return True
+            a, b = a.convert("RGB"), b.convert("RGB")
+            if box is not None:
+                w, h = a.size
+                x1, y1, x2, y2 = (max(0, min(w if i % 2 == 0 else h, int(v))) for i, v in enumerate(box))
+                if x2 <= x1 or y2 <= y1:
+                    return True
+                a, b = a.crop((x1, y1, x2, y2)), b.crop((x1, y1, x2, y2))
+            r, g, bl = ImageChops.difference(a, b).split()
+            most = ImageChops.lighter(ImageChops.lighter(r, g), bl)    # the largest channel move
+            diff = most.point(lambda v: 255 if v > CHANGED_DELTA else 0)
+            moved = diff.histogram()[255]
+            area = a.size[0] * a.size[1]
+            return moved > max(CHANGED_MIN_PIXELS, CHANGED_SHARE * area)
+    except (OSError, ValueError):
+        return True
 
 
 def _late_order(out, driver, supervised, approved):

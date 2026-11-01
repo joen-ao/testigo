@@ -284,4 +284,54 @@ def _png(color):
     return buf.getvalue()
 
 
-PNG_CLEAN, PNG_SWAPPED = _png((255, 255, 255)), _png((250, 250, 250))
+PNG_CLEAN, PNG_SWAPPED = _png((255, 255, 255)), _png((120, 120, 120))   # a real repaint, not noise
+
+
+class RegionChangedTests(unittest.TestCase):
+    """Spec 07, review: rendering noise is not a change; another line of text is."""
+
+    def img(self, text=None, noise=0):
+        import io
+        from PIL import Image, ImageDraw
+        im = Image.new("RGB", (400, 120), (255, 255, 255))
+        d = ImageDraw.Draw(im)
+        if text:
+            d.text((20, 40), text, fill=(20, 20, 20))
+        for i in range(noise):                      # a few stray pixels, slightly off
+            im.putpixel((5 + i, 5), (250, 250, 250))
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_noise_is_not_a_change_but_another_address_is(self):
+        from .loop import region_changed
+        box = [0, 0, 400, 120]
+        a = self.img("120 Harbor Road, Unit 4, Riverton")
+        self.assertFalse(region_changed(a, a, box))
+        self.assertFalse(region_changed(a, self.img("120 Harbor Road, Unit 4, Riverton", noise=30), box))
+        self.assertTrue(region_changed(a, self.img("88 Mill Street, Riverton"), box))
+        self.assertTrue(region_changed(a, b"not a png", box))
+
+    def test_a_page_that_keeps_changing_is_stopped_never_clicked(self):
+        from receipts import keys
+        from tests.fixtures import captures as fx
+
+        class Flicker(FixtureDriver):
+            recapture_before_sensitive = True
+
+            def __init__(self):
+                super().__init__("clean")
+                self.seen = 0
+
+            def observe(self):
+                self.seen += 1
+                c = fx.capture_clean(150)
+                c.screenshot = PNG_CLEAN if self.seen % 2 else PNG_SWAPPED   # differs at every click
+                return c
+
+        d = Flicker()
+        out = loop_run(d, ScriptedAgent(), supervised=True, signing_key=keys.generate_seed())
+        self.assertTrue(out.blocked)
+        self.assertIsNone(d.last_order)
+        labels = [e.get("label", "") for e in out.events if e["type"] == "agent.step"]
+        self.assertIn("stopped: the screen kept changing while it was checked", labels)
