@@ -7,11 +7,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from interceptor.policy import Policy, load
-from policy import compile as pc
-from policy.compile import (MandateRefused, build_policy_dict, compile_mandate,
+from app.core.policy.model import Policy, load
+from app.core.policy import compile as pc
+from app.core.policy.compile import (MandateRefused, build_policy_dict, compile_mandate,
                             parse_amount_cents, sign_policy_dict, to_yaml)
-from receipts import keys
+from app.core.evidence import keys
 
 
 class CompileTests(unittest.TestCase):
@@ -59,7 +59,7 @@ GOOD = {"deliver_only": [{"name": "our warehouse", "address": ""}],
 
 
 class FakeMeta:
-    """Stands in for common.meta_client.MetaClient: canned transcript and Spark JSON."""
+    """Stands in for app.adapters.meta.client.MetaClient: canned transcript and Spark JSON."""
 
     def __init__(self, extraction, transcript=PHRASE):
         self.content = extraction if isinstance(extraction, (str, type(None))) else json.dumps(extraction)

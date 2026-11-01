@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common.config import ROOT
+from app.common.config import ROOT
 
 # Built from pieces so this file does not flag itself.
 PEM = re.compile("-----BEGIN [A-Z ]*" + "PRIVATE KEY-----")

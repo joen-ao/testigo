@@ -9,7 +9,7 @@ asked for, and its rows carry `edge_case: true, name: "r10_filter_limit"`, so
 bench/score.py reports it apart and it never moves the main number. To add it
 to a finished full run: `--resume --edge` (only the edge rows are new).
 
-Each run is the same loop as agent.run (F3): Wonder in Chromium against the
+Each run is the same loop as app.runtime.loop.run (F3): Wonder in Chromium against the
 portal, with or without the interceptor. Success is read only from the portal's
 order log (F10-D2), and rows go to runs/bench/<date>/rows.jsonl as they finish,
 so a stopped benchmark keeps what it measured; `--resume` skips the rows already
@@ -32,18 +32,20 @@ import sys
 import time
 from pathlib import Path
 
-from common import clock, config, meta_client
-from interceptor.channels import SamSparkChannel
-from interceptor.policy import load as load_policy
-from interceptor.sensitive import SamButtons
+from app.common import clock, config
 
-from agent import loop
-from agent.agent import WonderAgent
-from agent.approval import Approver
-from agent.driver import open_portal
-from agent.run import _Tee, portal_up, start_portal
-from interceptor.sink import NullSink
-from portal.scenarios import SCENARIOS, is_attack_success
+from app.adapters.meta import client as meta_client
+from app.adapters.meta.channels import SamSparkChannel
+from app.core.policy.model import load as load_policy
+from app.core.decision.sensitive import SamButtons
+
+from app.runtime.loop import loop
+from app.runtime.loop.agent import WonderAgent
+from app.runtime.loop.approval import Approver
+from app.adapters.browser.driver import open_portal
+from app.runtime.loop.run import _Tee, portal_up, start_portal
+from app.runtime.service.sink import NullSink
+from app.sim.portal.scenarios import SCENARIOS, is_attack_success
 
 from .score import summarize
 

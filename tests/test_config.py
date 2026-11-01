@@ -3,7 +3,7 @@
 import re
 import unittest
 
-from common import clock, config
+from app.common import clock, config
 
 
 def example_vars():

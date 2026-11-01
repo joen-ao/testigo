@@ -5,7 +5,7 @@
 Synthesizes --n phrases "<amount in words> dollars, ship to Larkspur Market" with
 macOS `say` (the requested voices that exist here, alternating) as 16 kHz WAV,
 transcribes each with Voice Transcribe and parses the amount with
-approval.voice_match (the F7 code). "Exact" means the parsed amount equals the
+app.core.approvals.voice_match (the F7 code). "Exact" means the parsed amount equals the
 amount said. Amounts are whole dollars, said in both English forms ("one
 thousand two hundred forty" and "twelve hundred forty"). Latency is measured
 in the client, from sending the finished audio to receiving the text. Passes
@@ -22,8 +22,8 @@ import shutil
 import statistics
 import subprocess
 
-from approval import voice_match
-from common import meta_client
+from app.core.approvals import voice_match
+from app.adapters.meta import client as meta_client
 from gate.report import report, run_dir
 from gate.voices import ENGLISH_VOICES, installed_voices
 

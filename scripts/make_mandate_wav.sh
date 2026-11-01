@@ -1,6 +1,6 @@
 #!/bin/sh
 # Make a test WAV of the company's spoken mandate on macOS (F1), for
-#   .venv/bin/python -m policy.compile mandate <wav>
+#   .venv/bin/python -m app.core.policy.compile mandate <wav>
 #
 #   sh scripts/make_mandate_wav.sh                       # → $TMPDIR/mandate.wav
 #   sh scripts/make_mandate_wav.sh out.wav "Only ship to our warehouse, …"

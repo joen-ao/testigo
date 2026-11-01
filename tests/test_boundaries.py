@@ -10,7 +10,7 @@
 import re
 import unittest
 
-from common.config import ROOT
+from app.common.config import ROOT
 
 PRODUCT_DIRS = ("common", "portal", "agent", "interceptor", "receipts", "policy",
                 "approval", "gate", "scripts")

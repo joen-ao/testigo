@@ -3,7 +3,7 @@
 import re
 import secrets
 
-from common.config import ROOT
+from app.common.config import ROOT
 
 
 def main():

@@ -2,7 +2,7 @@
 
   .venv/bin/python -m gate.g4_sam_iou [--limit N] [--make] [--phrases "confirm button" button]
 
-Runs the real pixel channel (interceptor.channels.SamSparkChannel, F4-D5:
+Runs the real pixel channel (app.adapters.meta.channels.SamSparkChannel, F4-D5:
 Spark's rough boxes refined by SAM with a box prompt, and SAM's "confirm button"
 by name) on each capture from gate.g4_make_captures, and compares the box it
 returns for the amount, the address and the confirm button with the reference
@@ -21,11 +21,11 @@ Per-element results go to runs/gate/<date>/g4/iou.json.
 import argparse
 import json
 
-from common import meta_client
+from app.adapters.meta import client as meta_client
 from gate import g4_make_captures
 from gate.portal import PortalError, failed
 from gate.report import report, run_dir
-from interceptor.channels import Capture, SamSparkChannel
+from app.adapters.meta.channels import Capture, SamSparkChannel
 
 IOU_MIN = 0.5
 SHARE_MIN = 0.70

@@ -11,10 +11,10 @@ proof of the Oct-30 acceptance criterion — A1 and A2 are blocked, clean is not
 import argparse
 import json
 
-from common.config import POLICY_PATH
-from interceptor import events as ev
-from interceptor.engine import Interceptor
-from interceptor.policy import load
+from app.common.config import POLICY_PATH
+from app.core.decision import events as ev
+from app.core.decision.engine import Interceptor
+from app.core.policy.model import load
 from tests.fixtures import captures as fx
 
 CONFIRM = {"kind": "confirm"}

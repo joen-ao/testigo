@@ -23,12 +23,12 @@ placeholder values live here.
 import shutil
 from pathlib import Path
 
-from common.config import POLICY_PATH, ROOT
-from common.money import usd
-from interceptor.policy import load as load_policy
-from receipts import keys
-from receipts.bundle import sign_order
-from receipts.receipt import CROP_NAMES
+from app.common.config import POLICY_PATH, ROOT
+from app.common.money import usd
+from app.core.policy.model import load as load_policy
+from app.core.evidence import keys
+from app.core.evidence.bundle import sign_order
+from app.core.evidence.receipt import CROP_NAMES
 
 OUT = ROOT / "examples"
 AMOUNT = 124000

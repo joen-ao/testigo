@@ -16,10 +16,10 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from common import config
-from interceptor import service
-from interceptor.policy import load
-from receipts import keys
+from app.common import config
+from app.runtime.service import api as service
+from app.core.policy.model import load
+from app.core.evidence import keys
 from tests.test_approval_service import wav_b64
 from tests.test_policy_compile import GOOD, PHRASE, FakeMeta, with_
 
@@ -50,7 +50,7 @@ class Isolated(unittest.TestCase):
         self.assertEqual(committed_sha(), self.committed)
 
     def write_active(self, max_cents=90000):
-        from policy.compile import build_policy_dict, sign_policy_dict, write_policy
+        from app.core.policy.compile import build_policy_dict, sign_policy_dict, write_policy
         d = build_policy_dict(PHRASE, [{"name": "Larkspur Market",
                                         "address": "120 Harbor Road, Unit 4, Riverton"}],
                               max_cents, "new_address", signed_by="owner-key:larkspur")
@@ -67,7 +67,7 @@ class ResolutionTests(Isolated):
         self.assertEqual(config.policy_path(), config.active_policy_path())
 
     def test_loop_and_verify_use_the_active_policy(self):
-        from receipts.verify import verify_receipt
+        from app.security.verifier.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
         p = self.write_active(max_cents=150000)
         out = run_fixture("clean", supervised=True, run_dir=self.tmp / "r1")
@@ -102,14 +102,14 @@ class PolicyTrustTests(Isolated):
     signed, and an active policy that is not the owner's is never enforced."""
 
     def unsigned_active(self, **rules):
-        from policy.compile import build_policy_dict, write_policy
+        from app.core.policy.compile import build_policy_dict, write_policy
         d = build_policy_dict(PHRASE, [{"name": "Bodega X", "address": "88 Mill Street, Riverton"}],
                               99_000_000, "new_address", signed_by="owner-key:larkspur")
         d.update(rules)
         write_policy(d, config.active_policy_path())
 
     def test_earlier_receipts_still_verify_after_a_new_mandate(self):
-        from receipts.verify import verify_receipt
+        from app.security.verifier.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
         r0 = run_fixture("clean", supervised=True, run_dir=self.tmp / "r0")      # committed policy
         p1 = self.write_active(max_cents=150000)
@@ -131,9 +131,9 @@ class PolicyTrustTests(Isolated):
     def test_a_run_in_progress_keeps_its_policy_verifiable(self):
         # the loop loads the policy once; a mandate signed meanwhile must not
         # make its receipt fail check 1
-        from receipts.verify import verify_receipt
+        from app.security.verifier.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
-        from agent import loop
+        from app.runtime.loop import loop
         p1 = self.write_active(max_cents=150000)
         real = loop.load_policy
 
@@ -149,7 +149,7 @@ class PolicyTrustTests(Isolated):
         self.assertTrue(res.checks[0].ok, res.checks[0].detail)
 
     def test_archived_policy_must_be_the_owners(self):
-        from receipts.verify import verify_receipt
+        from app.security.verifier.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
         self.write_active(max_cents=150000)
         out = run_fixture("clean", supervised=True, run_dir=self.tmp / "r")
@@ -191,7 +191,7 @@ class PolicyTrustTests(Isolated):
         with self.assertRaisesRegex(config.PolicyNotTrusted, "sha256"):
             config.policy_path()
         # 2. hash restamped, signature not the owner's
-        from interceptor.policy import Policy
+        from app.core.policy.model import Policy
         q = Policy(data)
         q.stamp_hash()
         q.sign(keys.generate_seed())
@@ -410,7 +410,7 @@ class MandateServiceTests(Isolated):
         self.assertFalse(self.key.exists())                    # never created by the page
 
     def test_voice_unavailable_is_said(self):
-        from common.meta_client import NotConfigured
+        from app.adapters.meta.client import NotConfigured
 
         class Down(FakeMeta):
             def transcribe(self, audio_path, language="en"):

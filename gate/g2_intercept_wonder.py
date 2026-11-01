@@ -16,14 +16,15 @@ and each run's outcome go to runs/gate/<date>/g2/.
 import argparse
 import json
 
-from agent import loop
-from agent.agent import WonderAgent
-from agent.driver import open_portal
-from agent.run import portal_up, start_portal
-from common import config, meta_client
+from app.runtime.loop import loop
+from app.runtime.loop.agent import WonderAgent
+from app.adapters.browser.driver import open_portal
+from app.runtime.loop.run import portal_up, start_portal
+from app.common import config
+from app.adapters.meta import client as meta_client
 from gate.report import report, run_dir
-from interceptor.channels import SamSparkChannel
-from interceptor.sensitive import SamButtons
+from app.adapters.meta.channels import SamSparkChannel
+from app.core.decision.sensitive import SamButtons
 
 
 def browser_actions(out):

@@ -2,7 +2,7 @@
 
 import unittest
 
-from approval import voice_match
+from app.core.approvals import voice_match
 from gate import g2_intercept_wonder as g2
 from gate import g3_attacks_vs_wonder as g3
 from gate import g4_make_captures as g4m

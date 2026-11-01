@@ -1,4 +1,4 @@
-"""View 3: `agent.run --no-supervisor --explain` reads the confirming frame once,
+"""View 3: `app.runtime.loop.run --no-supervisor --explain` reads the confirming frame once,
 after the run, observe only. WitnessBench never does.
 
 Test data only: the fixture driver, the scripted agent and the fixture pixel
@@ -16,10 +16,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent import explain
-from agent import run as agent_run
-from interceptor import events as ev
-from interceptor.hub import validate
+from app.runtime.loop import explain
+from app.runtime.loop import run as agent_run
+from app.core.decision import events as ev
+from app.runtime.service.hub import validate
 from tests.fixtures import captures as fx
 from tests.fixtures.fake_agent import FixtureDriver, ScriptedAgent, run_fixture
 
@@ -133,7 +133,7 @@ class Pixels:
 
 
 class RunMainTests(unittest.TestCase):
-    """agent.run end to end with test doubles: --explain adds one event and
+    """app.runtime.loop.run end to end with test doubles: --explain adds one event and
     explain.json, and leaves outcome.json exactly as without it."""
 
     def main(self, *flags):

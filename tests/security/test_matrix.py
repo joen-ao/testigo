@@ -16,16 +16,16 @@ from unittest import mock
 
 from PIL import Image
 
-from agent.approval import AutoApprover, DenyApprover
-from agent.loop import run as loop_run
-from common import config
-from interceptor import events as ev
-from interceptor.channels import FixtureChannel, SamSparkChannel
-from interceptor.engine import Interceptor
-from interceptor.policy import load as load_policy
-from receipts import keys
-from receipts.bundle import sign_order
-from receipts.verify import verify_receipt
+from app.runtime.loop.approval import AutoApprover, DenyApprover
+from app.runtime.loop.loop import run as loop_run
+from app.common import config
+from app.core.decision import events as ev
+from app.adapters.meta.channels import FixtureChannel, SamSparkChannel
+from app.core.decision.engine import Interceptor
+from app.core.policy.model import load as load_policy
+from app.core.evidence import keys
+from app.core.evidence.bundle import sign_order
+from app.security.verifier.verify import verify_receipt
 from tests.fixtures import captures as fx
 from tests.fixtures.fake_agent import FixtureDriver, ScriptedAgent, run_fixture
 
@@ -110,11 +110,11 @@ class ModelFailure(unittest.TestCase):
         self.assertEqual(self.run_with(Down()).status, ev.CANNOT_VERIFY)
 
     def test_off_schema(self):
-        from interceptor.test_channels import FakeMeta
+        from app.adapters.meta.test_channels import FakeMeta
         self.assertEqual(self.run_with(FakeMeta(screen={"lines": [], "amount": "1240"})).status, ev.CANNOT_VERIFY)
 
     def test_spend_cap(self):
-        from common.meta_client import SpendCapExceeded
+        from app.adapters.meta.client import SpendCapExceeded
 
         class Broke:
             def chat(self, *a, **k):
@@ -269,7 +269,7 @@ class PolicyNotTrusted(unittest.TestCase):
     the system fails closed (common/config.py)."""
 
     def setUp(self):
-        from policy.compile import HEADER, sign_policy_dict, to_yaml
+        from app.core.policy.compile import HEADER, sign_policy_dict, to_yaml
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.seed = keys.generate_seed()
@@ -308,7 +308,7 @@ class SpendPerRun(unittest.TestCase):
 
     def test_the_run_cap_stops_calls_and_resets_per_run(self):
         from types import SimpleNamespace as NS
-        from common.meta_client import MetaClient, SpendCapExceeded
+        from app.adapters.meta.client import MetaClient, SpendCapExceeded
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         s = config.settings()

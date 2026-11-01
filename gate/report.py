@@ -8,7 +8,7 @@ the same object and any raw data under runs/gate/<date>/; exit code 0 or 1.
 
 import json
 
-from common import clock, config
+from app.common import clock, config
 
 
 def run_dir(gate_id):

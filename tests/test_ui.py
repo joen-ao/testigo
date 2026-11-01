@@ -13,9 +13,9 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from interceptor import events as ev
-from interceptor import service
-from interceptor.hub import EventHub, InvalidEvent, validate
+from app.core.decision import events as ev
+from app.runtime.service import api as service
+from app.runtime.service.hub import EventHub, InvalidEvent, validate
 from tests.test_approval_service import wav_b64
 
 
@@ -25,7 +25,7 @@ def check_event():
                            [], ["a line painted in the banner"], 1400, "visible text not in code")
 
 
-from common.config import SCENARIO as CURRENT
+from app.common.config import SCENARIO as CURRENT
 
 class HubTests(unittest.TestCase):
     def test_validate_accepts_contract_and_rejects_the_rest(self):
@@ -197,7 +197,7 @@ class ServiceUITests(unittest.TestCase):
 
     def test_receipt_and_real_verify(self):
         self.assertEqual(self.c.get("/api/receipt").status_code, 404)
-        from receipts import keys
+        from app.core.evidence import keys
         from tests.fixtures.bundles import build_bundle
         seed = keys.generate_seed()                    # a throwaway key, never the owner's
         for name in ("clean", "a3"):
@@ -220,7 +220,7 @@ class ServiceUITests(unittest.TestCase):
 
     # -- spec 07 -----------------------------------------------------------------
     def test_tampered_verify_fails_and_leaves_the_receipt_alone(self):
-        from receipts import keys
+        from app.core.evidence import keys
         from tests.fixtures.bundles import build_bundle
         build_bundle("clean", str(self.tmp / "clean"), seed=keys.generate_seed())
         before = (self.tmp / "clean" / "receipt.json").read_bytes()
@@ -262,8 +262,8 @@ class ServiceUITests(unittest.TestCase):
         self.assertEqual((runs[2]["result"], runs[2]["detail"]), ("blocked", "changed after approval"))
 
     def test_rules_editor_signs_a_new_max_and_reset_restores(self):
-        from common import config
-        from receipts import keys
+        from app.common import config
+        from app.core.evidence import keys
         key = self.tmp / "owner.key"
         keys.load_or_create_seed(key)
         env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key)})
@@ -373,7 +373,7 @@ class ChromiumCase(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def setUp(self):
-        from approval.desk import ApprovalDesk
+        from app.core.approvals.desk import ApprovalDesk
         service.hub.reset()
         service.desk = ApprovalDesk()
         (self.tmp / "bench_results.json").unlink(missing_ok=True)
@@ -425,12 +425,12 @@ class PageTests(ChromiumCase):
         self.assertEqual(self.page.evaluate("MAX_REC_S"), 18)
 
     def test_buyer_name_matches_config(self):
-        from common.config import BUYER
+        from app.common.config import BUYER
         self.show(0)
         self.assertEqual(self.page.evaluate("BUYER_NAME"), BUYER["name"])
 
     def test_norm_read_matches_python(self):
-        from receipts.receipt import norm_read
+        from app.core.evidence.receipt import norm_read
         self.show(0)
         samples = [("amount", "USD 1,240.00"), ("amount", "$1.240,00"), ("amount", "1240"), ("amount", "$1,240"),
                    ("amount", "1240.00"), ("amount", "USD 1,240.50"), ("amount", "Total USD 1,240.00 3 items"),
@@ -484,8 +484,8 @@ class PageTests(ChromiumCase):
 
     def test_ship_to_address_matches_python(self):
         # review of 8495675: the strict "Ship to" equality, both sides
-        from common.address import ship_to_address
-        from common.config import BUYER
+        from app.common.address import ship_to_address
+        from app.common.config import BUYER
         self.show(0)
         base = "Ship to: Larkspur Market, 120 Harbor Road, Unit 4"
         texts = [base + t for t in ("", ", Riverton", ", springfield", " (c/o Dock 9 Storage)", "; Dock 9",
@@ -505,7 +505,7 @@ class PageTests(ChromiumCase):
     def test_whitespace_is_the_same_set_on_both_sides(self):
         # review of 8495675: /\s/u and str.isspace() differ on \x1c-\x1f, \x85
         # and the BOM; both drop C0/C1 controls and the BOM first, then agree
-        from common.address import clean
+        from app.common.address import clean
         self.show(0)
         js = set(self.page.evaluate("""() => {
             const out = [];
@@ -608,7 +608,7 @@ class PageTests(ChromiumCase):
 
     def mandate_env(self, meta):
         """A throwaway owner key and the fake Voice/Spark for view 1."""
-        from receipts import keys
+        from app.core.evidence import keys
         key = self.tmp / "owner.key"
         keys.load_or_create_seed(key)
         env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key)})
@@ -617,14 +617,14 @@ class PageTests(ChromiumCase):
         fake = mock.patch.object(service, "mandate_client", lambda: meta)
         fake.start()
         self.addCleanup(fake.stop)
-        from common import config
+        from app.common import config
         active = config.active_policy_path()
         self.addCleanup(lambda: active.unlink(missing_ok=True))
         return active
 
     def test_view_1_live_mandate_record_draft_sign(self):
         import hashlib
-        from common import config
+        from app.common import config
         from tests.test_policy_compile import FakeMeta, with_
         committed = hashlib.sha256(config.POLICY_PATH.read_bytes()).hexdigest()
         cien = with_(max_amount_words="one thousand dollars", max_per_order_dollars=1000)
@@ -783,7 +783,7 @@ class FlowPageTests(ChromiumCase):
     def earlier_scenario_results(self):
         """The 31 Oct delivery-domain results: an earlier scenario, history only."""
         import shutil
-        from interceptor.service import RESULTS_DIR
+        from app.runtime.service.api import RESULTS_DIR
         shutil.copy(Path(RESULTS_DIR) / "witnessbench-2026-10-31-delivery.json", self.tmp / "bench_results.json")
 
     def test_landing_shows_old_results_as_not_measured(self):
@@ -900,7 +900,7 @@ class FlowPageTests(ChromiumCase):
     # -- spec 07: history and the rules editor ----------------------------------
     def test_history_page_lists_runs_and_verifies_a_receipt(self):
         import json
-        from receipts import keys
+        from app.core.evidence import keys
         from tests.fixtures.bundles import build_bundle
         d = self.tmp / "2026-11-01" / "120000_clean_v1_sup"
         build_bundle("clean", str(d), seed=keys.generate_seed())
@@ -938,8 +938,8 @@ class FlowPageTests(ChromiumCase):
         self.page.wait_for_function("(document.getElementById('verify-res') || {}).innerText && /Valid: the signature/.test(document.getElementById('verify-res').innerText)")
 
     def test_rules_editor_in_step_1(self):
-        from common import config
-        from receipts import keys
+        from app.common import config
+        from app.core.evidence import keys
         key = self.tmp / "owner.key"
         keys.load_or_create_seed(key)
         env = mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key)})
@@ -1090,7 +1090,7 @@ class FlowPageTests(ChromiumCase):
         self.assertIn("The agent stopped on its own", self.main())
 
     def test_step_4_delivered_and_receipt_verifies(self):
-        from receipts import keys
+        from app.core.evidence import keys
         from tests.fixtures.bundles import build_bundle
         build_bundle("clean", str(self.tmp / "clean"), seed=keys.generate_seed())
         same = {"approved": {"amount": "USD 1,240.00", "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"},

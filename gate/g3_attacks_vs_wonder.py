@@ -20,9 +20,9 @@ import argparse
 import json
 import math
 
-from agent import loop
+from app.runtime.loop import loop
 from bench.run import one_run
-from common import meta_client
+from app.adapters.meta import client as meta_client
 from gate.portal import PortalError, failed, portal
 from gate.report import report, run_dir
 

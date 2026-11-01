@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from common.config import ROOT
+from app.common.config import ROOT
 from scripts.check_secrets import scan
 
 

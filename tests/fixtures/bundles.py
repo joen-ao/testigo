@@ -20,11 +20,11 @@ system they are the real cropped PNGs — the hashing path is identical.)
 import argparse
 from pathlib import Path
 
-from common.config import POLICY_PATH
-from interceptor.engine import Interceptor
-from interceptor.policy import load as load_policy
-from receipts import keys
-from receipts.receipt import build as build_receipt, dumps
+from app.common.config import POLICY_PATH
+from app.core.decision.engine import Interceptor
+from app.core.policy.model import load as load_policy
+from app.core.evidence import keys
+from app.core.evidence.receipt import build as build_receipt, dumps
 from tests.fixtures import captures as fx
 
 CROP_NAMES = ("amount", "address")

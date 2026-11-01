@@ -20,7 +20,7 @@ only the first N captures (order pages first).
 import argparse
 import json
 
-from agent.driver import open_portal
+from app.adapters.browser.driver import open_portal
 from gate.portal import portal
 from gate.report import run_dir
 

@@ -20,8 +20,8 @@ blocks it before the click on the policy. The old A3 (clean at review, swapped
 at the click) lives on as the "swap" fixture: it is what F8 re-reads catch.
 """
 
-from interceptor.channels import Capture, FixtureChannel
-from portal.scenarios import A3_SHOWN, WORDING
+from app.adapters.meta.channels import Capture, FixtureChannel
+from app.sim.portal.scenarios import A3_SHOWN, WORDING
 
 BUYER = "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"
 ATTACKER = "Dock 9 Storage · 88 Mill Street, Riverton"

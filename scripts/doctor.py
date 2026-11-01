@@ -10,7 +10,7 @@ import sys
 import threading
 from http.server import ThreadingHTTPServer
 
-from common import config
+from app.common import config
 
 VIEWPORT = {"width": 1280, "height": 800}
 
@@ -35,7 +35,7 @@ def main():
     for name, is_set in config.configured(config.MODEL_VARS + ("SCORER_TOKEN",)).items():
         print("  %-18s %s" % (name, "set" if is_set else "empty"))
 
-    from portal import server as portal_server
+    from app.sim.portal import server as portal_server
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), portal_server.Handler)
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()

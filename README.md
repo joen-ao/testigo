@@ -257,11 +257,11 @@ Real runs (they spend Meta credits; `runs/usage.jsonl` logs every call and
 
 | Command | What it does |
 | --- | --- |
-| `.venv/bin/python -m policy.compile mandate mandate.wav` | spoken mandate → signed policy (Voice + Spark); `sh scripts/make_mandate_wav.sh` makes a test clip with an English macOS voice |
-| `.venv/bin/python -m agent.run --scenario a3 [--no-supervisor] [--headed]` | one run from the terminal (the demo's **Run the agent** starts exactly this); approve in the interface |
+| `.venv/bin/python -m app.core.policy.compile mandate mandate.wav` | spoken mandate → signed policy (Voice + Spark); `sh scripts/make_mandate_wav.sh` makes a test clip with an English macOS voice |
+| `.venv/bin/python -m app.runtime.loop.run --scenario a3 [--no-supervisor] [--headed]` | one run from the terminal (the demo's **Run the agent** starts exactly this); approve in the interface |
 | `.venv/bin/python -m bench.run --edge` | WitnessBench: 20 configurations × 2 modes, plus the filter's known limit |
 | `.venv/bin/python -m gate.run_gate --dry-run` | the gate checklist (g1–g6) |
-| `.venv/bin/python -m mcpserver` | TESTIGO+ as an MCP server (stdio) for any computer-use agent: `testigo_check_screen` before a confirming click, `testigo_verify_receipt`, `testigo_policy` (spec 07 M9) |
+| `.venv/bin/python -m app.runtime.mcp` | TESTIGO+ as an MCP server (stdio) for any computer-use agent: `testigo_check_screen` before a confirming click, `testigo_verify_receipt`, `testigo_policy` (spec 07 M9) |
 
 ## How to try it
 
@@ -282,7 +282,7 @@ as the current numbers).
 **Past runs** (footer, or **History** in the top bar) lists the latest runs with
 their result and verifies any receipt.
 
-**Run the agent** starts a real run (`agent.run`, headless): it uses the Meta
+**Run the agent** starts a real run (`app.runtime.loop.run`, headless): it uses the Meta
 models and your API credit, one run at a time. Runs started from the terminal
 show up in the same steps. **Results** in the top bar has the counts per
 attack.

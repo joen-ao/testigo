@@ -5,7 +5,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from interceptor.service import app
+from app.runtime.service.api import app
 
 
 class ServiceTests(unittest.TestCase):
@@ -28,13 +28,13 @@ import threading
 import time
 from unittest import mock
 
-from interceptor import service
+from app.runtime.service import api as service
 
 REAL_START = service.start_process      # before any test replaces it
 
 
 class FakeProc:
-    """Stands in for `python -m agent.run`. Never starts anything. `stubborn`
+    """Stands in for `python -m app.runtime.loop.run`. Never starts anything. `stubborn`
     ignores terminate (only kill stops it); `pid` makes it leave a pid file."""
 
     def __init__(self, lines=("approval: interface\n",), stubborn=False, pid=None):
@@ -53,7 +53,7 @@ class FakeProc:
     def wait(self, timeout=None):
         if not self.done.wait(timeout if timeout is not None else 10):
             import subprocess
-            raise subprocess.TimeoutExpired("agent.run", timeout)
+            raise subprocess.TimeoutExpired("app.runtime.loop.run", timeout)
         return self.returncode
 
     def exit(self, code):
@@ -75,7 +75,7 @@ class RunEndpointTests(unittest.TestCase):
         import os
         import shutil
         import tempfile
-        from approval.desk import ApprovalDesk
+        from app.core.approvals.desk import ApprovalDesk
         self.tmp = tempfile.mkdtemp()
         env = mock.patch.dict(os.environ, {"RUNS_DIR": self.tmp})
         env.start()
@@ -116,7 +116,7 @@ class RunEndpointTests(unittest.TestCase):
         self.assertEqual((got["state"], got["mode"], got["scenario"], got["variant"]),
                          ("running", "supervised", "a3", 1))
         argv, env = self.started[0]
-        self.assertEqual(argv[1:], ["-m", "agent.run", "--scenario", "a3", "--variant", "1",
+        self.assertEqual(argv[1:], ["-m", "app.runtime.loop.run", "--scenario", "a3", "--variant", "1",
                                     "--approve-in", "interface"])
         self.assertIsInstance(argv, list)            # an argv list: never a shell string
         self.assertEqual(env["INTERCEPTOR_PORT"], "9123")  # reports back to this service
@@ -220,7 +220,7 @@ class RunEndpointTests(unittest.TestCase):
         service.runs.proc.exit(0)
 
     def test_cancel_during_an_approval_denies_it(self):
-        from interceptor import events as ev
+        from app.core.decision import events as ev
         a = ev.approval_requested(5, 120000, "Larkspur Market · 120 Harbor Road, Unit 4, Riverton", "a" * 64, "b" * 64)
         self.c.post("/api/run", json={"scenario": "clean", "supervised": True})
         self.c.post("/api/approval/open", json={"event": a})
@@ -263,7 +263,7 @@ class RunEndpointTests(unittest.TestCase):
         self.assertFalse((Path(self.tmp) / service.RUN_PID_FILE).exists())
 
     def test_shutdown_and_orphan_stop_kill_the_whole_process_group(self):
-        """A real child here is a harmless `sleep`, never agent.run."""
+        """A real child here is a harmless `sleep`, never app.runtime.loop.run."""
         import subprocess
         import sys
         real = REAL_START

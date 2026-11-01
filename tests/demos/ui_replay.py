@@ -14,7 +14,7 @@ import json
 import time
 import urllib.request
 
-from interceptor.sink import service_url
+from app.runtime.service.sink import service_url
 from tests.fixtures.fake_agent import run_fixture
 
 

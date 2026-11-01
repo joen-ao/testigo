@@ -4,15 +4,15 @@ import subprocess
 import sys
 import time
 
-from common import config
+from app.common import config
 
 
 def main():
     s = config.settings()
     procs = [
-        ("portal", [sys.executable, "-m", "portal.server",
+        ("portal", [sys.executable, "-m", "app.sim.portal.server",
                     "--host", s.portal_host, "--port", str(s.portal_port)]),
-        ("interceptor", [sys.executable, "-m", "uvicorn", "interceptor.service:app",
+        ("interceptor", [sys.executable, "-m", "uvicorn", "app.runtime.service.api:app",
                          "--host", s.interceptor_host, "--port", str(s.interceptor_port),
                          "--log-level", "warning"]),
     ]

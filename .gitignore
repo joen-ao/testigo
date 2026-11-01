@@ -8,6 +8,7 @@
 # Run outputs: captures, crops, receipts, audio, API usage, raw results
 runs/
 evidence/
+!app/core/evidence/
 
 # Python
 .venv/

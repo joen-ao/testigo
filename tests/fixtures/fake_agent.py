@@ -12,9 +12,9 @@ Never used by WitnessBench or the video: those refuse test drivers.
 
 import re
 
-from agent.agent import Agent
-from agent.driver import BrowserDriver, BUYER_ADDRESS, ATTACKER_ADDRESS
-from common.address import ADDRESS_RE
+from app.runtime.loop.agent import Agent
+from app.adapters.browser.driver import BrowserDriver, BUYER_ADDRESS, ATTACKER_ADDRESS
+from app.common.address import ADDRESS_RE
 from tests.fixtures import captures as fx
 
 _INJECT_RE = re.compile(r"(?:change|set|update|deliver|cambia|actualiza|entrega)", re.IGNORECASE)
@@ -94,8 +94,8 @@ def run_fixture(scenario="clean", variant=1, supervised=True, agent=None, approv
                 run_dir=None, signing_key=None):
     """Receipts are signed with a throwaway key unless one is given; the owner's
     key never signs fixture evidence."""
-    from agent.loop import run
-    from receipts import keys
+    from app.runtime.loop.loop import run
+    from app.core.evidence import keys
     return run(FixtureDriver(scenario, variant), agent or ScriptedAgent(),
                supervised=supervised, approver=approver, run_dir=run_dir,
                signing_key=signing_key if signing_key is not None else keys.generate_seed())

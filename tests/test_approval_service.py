@@ -18,10 +18,10 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from agent.approval import ServiceApprover
-from approval.desk import MAX_VOICE_ATTEMPTS, ApprovalDesk, DeskError
-from interceptor import events as ev
-from interceptor import service
+from app.runtime.loop.approval import ServiceApprover
+from app.core.approvals.desk import MAX_VOICE_ATTEMPTS, ApprovalDesk, DeskError
+from app.core.decision import events as ev
+from app.runtime.service import api as service
 
 GOOD = "Twelve hundred forty dollars, ship to Larkspur Market"
 WRONG = "fifteen hundred dollars, ship to Larkspur Market"
@@ -384,8 +384,8 @@ class RunWiringTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_crop_files_named_by_the_hash_the_event_carries(self):
-        from agent.run import CropFiles
-        from interceptor.channels import sha_crop
+        from app.runtime.loop.run import CropFiles
+        from app.adapters.meta.channels import sha_crop
 
         class Channel:
             def read_regions(self, capture):
@@ -405,8 +405,8 @@ class RunWiringTests(unittest.TestCase):
         self.assertEqual(cf.images_for(dict(e, crops={"amount": "0" * 64})), {})
 
     def test_choose_approver(self):
-        from agent import run
-        from agent.approval import ConsoleApprover
+        from app.runtime.loop import run
+        from app.runtime.loop.approval import ConsoleApprover
         crops = mock.Mock()
         self.assertIsInstance(run.choose_approver("console", 300, crops), ConsoleApprover)
         self.assertIsInstance(run.choose_approver("interface", 300, crops), ServiceApprover)

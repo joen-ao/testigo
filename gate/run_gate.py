@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import sys
 
-from common import clock, config
+from app.common import clock, config
 
 # id, script (None = no script), mandatory, needs, checklist line (general spec, «Gate de hoy»)
 ITEMS = [

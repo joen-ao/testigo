@@ -13,8 +13,8 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from common import config
-from common.meta_client import MetaClient, NotConfigured, SpendCapExceeded, parse_sam_boxes
+from app.common import config
+from app.adapters.meta.client import MetaClient, NotConfigured, SpendCapExceeded, parse_sam_boxes
 
 COMPLETION = {
     "id": "c1", "object": "chat.completion", "created": 0, "model": "fake",

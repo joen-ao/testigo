@@ -2,7 +2,7 @@
 
   .venv/bin/python -m gate.g1_api [--audio clip.wav]
 
-Checks, each against the real API through common.meta_client:
+Checks, each against the real API through app.adapters.meta.client:
   models  the four configured model ids are listed by the API
   spark   Spark 1.3 reads the total from a screenshot of the portal
   wonder  Wonder 1.0 answers the same question
@@ -26,8 +26,8 @@ import subprocess
 import threading
 from http.server import ThreadingHTTPServer
 
-from common import meta_client
-from approval.voice_match import words_to_int
+from app.adapters.meta import client as meta_client
+from app.core.approvals.voice_match import words_to_int
 from gate.report import report, run_dir
 from gate.voices import english_voice, say_args
 
@@ -38,7 +38,7 @@ SPOKEN = "Twelve hundred forty dollars, ship to Larkspur Market"
 def portal_screenshot(path):
     """A 1280x800 capture of the clean order page, from an in-process portal."""
     from playwright.sync_api import sync_playwright
-    from portal.server import Handler
+    from app.sim.portal.server import Handler
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:

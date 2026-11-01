@@ -25,17 +25,21 @@ dependencies = [
 dev = ["pytest", "httpx"]
 
 [project.scripts]
-testigo = "receipts.cli:main"
+testigo = "app.security.verifier.cli:main"
 
 [tool.setuptools]
-packages = ["common", "portal", "agent", "interceptor", "receipts", "policy", "approval", "gate", "scripts", "bench", "mcpserver"]
+packages = ["app", "app.common", "app.core", "app.core.policy", "app.core.decision", "app.core.evidence",
+            "app.core.approvals", "app.adapters", "app.adapters.meta", "app.adapters.browser", "app.runtime",
+            "app.runtime.loop", "app.runtime.service", "app.runtime.mcp", "app.security", "app.security.verifier",
+            "app.sim", "app.sim.portal", "gate", "scripts", "bench"]
 
 [tool.setuptools.package-data]
-portal = ["static/*.png"]
+"app.sim.portal" = ["static/*.png"]
+"app.core.policy" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests", "common", "portal", "interceptor", "agent", "receipts", "approval", "policy", "bench", "gate", "mcpserver"]
+testpaths = ["tests", "app", "bench", "gate"]
 python_files = ["test_*.py"]
 addopts = "-m 'not live'"
 markers = [

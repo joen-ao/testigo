@@ -1,7 +1,7 @@
 """The portal the gate scripts drive (g3, g4, g5).
 
 `portal()` uses the portal already listening on PORTAL_PORT, or starts one in
-this process (like agent.run). A portal from another checkout or an older
+this process (like app.runtime.loop.run). A portal from another checkout or an older
 version may be listening there: `probe()` checks that it answers `/api/run`
 with this .env's SCORER_TOKEN, and the scripts stop with a hint when it does
 not (stop it, or set PORTAL_PORT to a free port).
@@ -13,8 +13,8 @@ import urllib.error
 import urllib.request
 from contextlib import contextmanager
 
-from agent.run import portal_up, start_portal
-from common import config
+from app.runtime.loop.run import portal_up, start_portal
+from app.common import config
 
 
 def probe(url):
