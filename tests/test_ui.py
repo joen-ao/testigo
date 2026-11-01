@@ -394,7 +394,7 @@ class PageTests(ChromiumCase):
                    ("address", "120 Harbor Road, Unit 4, Riverton Dock 9 Storage"),
                    ("amount", "USD ١٢٤٠.00"), ("amount", "USD 1,240.00 ١٢"),
                    # review of 8495675: one strict amount, or unreadable
-                   ("amount", "USD 12'400.00"), ("amount", "USD 12, 400.00"), ("amount", "USD 12\u00b7400.00"),
+                   ("amount", "USD 12'400.00"), ("amount", "Total USD 1,240.00 Simulation - simulated addresses, no"), ("amount", "USD -1,240.00"), ("amount", "USD \u0661\u0662\u0664\u0660.00"), ("amount", "USD 12, 400.00"), ("amount", "USD 12\u00b7400.00"),
                    ("amount", "USD 1,24,000.00"), ("amount", "USD 12,4OO.00"), ("amount", "Total: USD 1,240.00"),
                    ("amount", "Order total US$ 1,240.00"), ("amount", "$ l,240.00"), ("amount", "Total USD 1,240.00 (3 items)"),
                    ("amount", "USD 1,240.00 USD 5.00"), ("amount", "1240.0"), ("amount", ""), ("amount", "IO"),

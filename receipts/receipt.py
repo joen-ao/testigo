@@ -88,19 +88,24 @@ _AMOUNT_RE = re.compile(
     % "|".join(l.replace(" ", r"\s+") for l in _AMOUNT_LABELS))
 _AMOUNT_NUM = re.compile(r"(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{2})?")
 _OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "O": "0"})
+_CURRENCY = re.compile(r"(?ai:us\$|usd)|\$")
+# a run of digits (I/l/O misread in digit places) and separators, not part of a word
+_NUM_RUN = re.compile(r"(?<![\w.,'\u2019\u00b7\-])[0-9IlO](?:[0-9IlO,.'\u2019\u00b7]*[0-9IlO])?(?!\w)")
 
 
 def _amount_cents(text):
-    """The amount in integer cents, as digits, or None when `text` is not
-    exactly one well-formed amount: "USD 1,240.00", "$1,240", "1240.00",
-    "Total: USD 1,240.00" and "USD 1,24O.00" all give "124000";
-    "USD 12'400.00", "USD 12, 400.00", "USD 1,24,000.00" and
-    "Total USD 1,240.00 (3 items)" give None."""
-    t = " ".join(_address.clean(text).split())
-    m = _AMOUNT_RE.match(t)
-    if not m or not re.search(r"[0-9]", m.group("num")):
+    """The amount in integer cents, as digits, or None when `text` does not hold
+    exactly one well-formed amount. Words around it do not count (a crop may
+    catch a label or the footer line under the total, WitnessBench 1 Nov), but a
+    second number or an odd separator does: "USD 1,240.00", "$1,240", "1240.00",
+    "Total: USD 1,240.00", "Total USD 1,240.00 Simulation only" and
+    "USD 1,24O.00" all give "124000"; "USD 12'400.00", "USD 12, 400.00",
+    "USD 1,24,000.00" and "Total USD 1,240.00 (3 items)" give None."""
+    t = _CURRENCY.sub(" ", " ".join(_address.clean(text).split()))
+    runs = [r for r in _NUM_RUN.findall(t) if re.search(r"[0-9]", r)]
+    if len(runs) != 1:
         return None
-    num = m.group("num").translate(_OCR_DIGITS)
+    num = runs[0].translate(_OCR_DIGITS)
     if not _AMOUNT_NUM.fullmatch(num):
         return None
     dollars, _, cents = num.partition(".")

@@ -210,8 +210,12 @@ class SamSparkChannel(PixelChannel):
                 agrees = got is not None and norm_read(label, text) == norm_read(
                     label, screen[label]["text"])
                 capture.crops[label] = data
+                # A text region is sure when SAM located it inside Spark's box
+                # and the crop, read alone, agrees with the first read. SAM's own
+                # score on a box prompt around text stays low (0.2-0.4 on honest
+                # screens, WitnessBench 1 Nov), so it is kept for display only.
                 out.append({"label": label, "box": box, "text": text,
-                            "confidence": conf if agrees else 0.0})
+                            "confidence": 1.0 if agrees else 0.0, "sam_confidence": conf})
         return out
 
     def read_label(self, crop_png):

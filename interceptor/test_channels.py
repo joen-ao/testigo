@@ -96,7 +96,8 @@ class ChannelTests(unittest.TestCase):
         regions = {r["label"]: r for r in SamSparkChannel(FakeMeta()).read_regions(cap)}
         self.assertEqual(set(regions), {"amount", "address", "confirm button"})
         self.assertEqual(regions["amount"]["text"], "USD 1,240.00")
-        self.assertAlmostEqual(regions["amount"]["confidence"], 0.88)
+        self.assertEqual(regions["amount"]["confidence"], 1.0)          # SAM centred + reads agree
+        self.assertAlmostEqual(regions["amount"]["sam_confidence"], 0.88)
         self.assertEqual(set(cap.crops), {"amount", "address"})
         self.assertIn("USD 1,240.00", cap.rendered_lines)
         self.assertEqual(cap.rendered_lines.count("a tile line"), 4)

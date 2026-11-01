@@ -301,11 +301,13 @@ const AMOUNT_RE = new RegExp(
   `^(?:(?:${AMOUNT_LABELS.map(l => ci(l).replace(/ /g, "\\s+")).join("|")})\\s*:?\\s*)?` +
   `(?:(?:${ci("usd")}|${ci("us")}\\$)\\s*|\\$\\s*)?` +
   "(?<num>[0-9IlO][0-9IlO,]*(?:\\.[0-9IlO]{2})?)$", "u");
+const CURRENCY = /(?:[uU][sS]\$|[uU][sS][dD])|\$/gu;
+const NUM_RUN = /(?<![\p{L}\p{N}_.,'\u2019\u00b7\-])[0-9IlO](?:[0-9IlO,.'\u2019\u00b7]*[0-9IlO])?(?![\p{L}\p{N}_])/gu;
 function amountCents(text) {
-  const t = clean(text).split(/\s+/u).filter(Boolean).join(" ");
-  const m = AMOUNT_RE.exec(t);
-  if (!m || !/[0-9]/.test(m.groups.num)) return null;
-  const num = m.groups.num.replace(/[Il]/g, "1").replace(/O/g, "0");
+  const t = clean(text).split(/\s+/u).filter(Boolean).join(" ").replace(CURRENCY, " ");
+  const runs = (t.match(NUM_RUN) || []).filter(r => /[0-9]/.test(r));
+  if (runs.length !== 1) return null;
+  const num = runs[0].replace(/[Il]/g, "1").replace(/O/g, "0");
   if (!/^(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{2})?$/.test(num)) return null;
   const [dollars, cents] = num.split(".");
   return (BigInt(dollars.replace(/,/g, "")) * 100n + BigInt(cents || "0")).toString();

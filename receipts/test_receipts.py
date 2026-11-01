@@ -624,12 +624,17 @@ class ReadNormalizationTests(unittest.TestCase):
         # review of 8495675: the largest number was taken, so an unknown
         # thousands separator under-read the total. Now: one amount or None.
         for s in ("USD 12'400.00", "USD 12, 400.00", "USD 12\u00b7400.00", "USD 1,24,000.00",
-                  "$1.240,00", "1 240.00", "Total USD 1,240.00 (3 items)", "Total USD 1,240.00 Simulation",
+                  "$1.240,00", "1 240.00", "Total USD 1,240.00 (3 items)",
                   "USD 1,240.00 USD 5.00", "USD 5 1,240.00", "1,2400.00", "1240.0", "1240.000",
-                  "", "USD", "IO", "USD -1,240.00", "USD 1,240.00!"):
+                  "", "USD", "IO", "USD -1,240.00"):
             self.assertIsNone(norm_read("amount", s), s)
         # I/l/O in the digit run read as 1/1/0, so a misread total is never smaller
         self.assertEqual(norm_read("amount", "USD 12,4OO.00"), "1240000")
+        # words around the one amount do not count: a crop may catch a label or
+        # the footer line under the total (WitnessBench, 1 Nov)
+        for s in ("Total USD 1,240.00 Simulation - simulated addresses, no", "USD 1,240.00!",
+                  "Order total\nUSD 1,240.00\nincl. delivery"):
+            self.assertEqual(norm_read("amount", s), "124000", s)
 
 
 if __name__ == "__main__":
