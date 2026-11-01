@@ -59,7 +59,8 @@ def new_id(now=None):
 
 
 def norm_read(name, text):
-    """A read value as compared: the amount in integer cents, as digits. The
+    """A read value as compared: the amount in integer cents, as digits (None
+    when it is not exactly one amount, _amount_cents). The
     address: the addresses in it in canonical form ("120 harbor road unit 4"),
     sorted, de-duplicated, joined by ","; labels, names and the city around
     them ("SHIP TO", "Larkspur Market", "Riverton") differ between screens and
@@ -72,24 +73,38 @@ def norm_read(name, text):
     return _address.norm_address(text)
 
 
-_AMOUNT_RE = re.compile(r"[0-9]+(?:[.,\s][0-9]{3}(?![0-9]))*(?:[.,][0-9]{2}(?![0-9]))?")
+# The amount crop read as ONE amount (review of 8495675): an optional label
+# ("Total", "Order total"), an optional currency ("USD", "US$", "$"), then
+# digits with optional standard "," thousands groups of 3 and optional ".dd"
+# cents; I, l and O misread for 1, 1 and 0 inside the digits (as in house
+# numbers). Anything else - a second number, another separator ("12'400",
+# "12, 400", "1,24,000", "1.240,00") - is unreadable (None) and the engine
+# does not let the order through (fail closed). ui/app.js ports it.
+_AMOUNT_LABELS = ("order total", "grand total", "total due", "amount due", "subtotal",
+                  "total", "amount")
+_AMOUNT_RE = re.compile(
+    r"^(?:(?ai:%s)\s*:?\s*)?(?:(?ai:usd|us\$)\s*|\$\s*)?"
+    r"(?P<num>[0-9IlO][0-9IlO,]*(?:\.[0-9IlO]{2})?)$"
+    % "|".join(l.replace(" ", r"\s+") for l in _AMOUNT_LABELS))
+_AMOUNT_NUM = re.compile(r"(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{2})?")
+_OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "O": "0"})
 
 
 def _amount_cents(text):
-    """The amount in integer cents, as digits: the largest number in `text`.
-    A final 2-digit part after "." or "," is the cents; a separator before 3
-    digits groups thousands: "USD 1,240.00", "$1,240", "1240.00" and "1240"
-    all give "124000"."""
-    # ASCII digits only, as ui/app.js reads them (Python's \d also takes "٣").
-    best = ""
-    for n in _AMOUNT_RE.findall(text):
-        n = re.sub(r"\s", "", n)
-        m = re.match(r"^(.*)[.,]([0-9]{2})$", n)
-        dollars, cents = (m.group(1), m.group(2)) if m else (n, "00")
-        v = str(int(re.sub(r"[^0-9]", "", dollars) or "0") * 100 + int(cents))
-        if (len(v), v) > (len(best), best):
-            best = v
-    return best
+    """The amount in integer cents, as digits, or None when `text` is not
+    exactly one well-formed amount: "USD 1,240.00", "$1,240", "1240.00",
+    "Total: USD 1,240.00" and "USD 1,24O.00" all give "124000";
+    "USD 12'400.00", "USD 12, 400.00", "USD 1,24,000.00" and
+    "Total USD 1,240.00 (3 items)" give None."""
+    t = " ".join(_address.clean(text).split())
+    m = _AMOUNT_RE.match(t)
+    if not m or not re.search(r"[0-9]", m.group("num")):
+        return None
+    num = m.group("num").translate(_OCR_DIGITS)
+    if not _AMOUNT_NUM.fullmatch(num):
+        return None
+    dollars, _, cents = num.partition(".")
+    return str(int(dollars.replace(",", "")) * 100 + int(cents or "0"))
 
 
 def compare(approved_read, executed_read, approved_hashes, executed_hashes):

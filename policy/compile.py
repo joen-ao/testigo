@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from approval.voice_match import normalize, words_to_int
+from approval.voice_match import SCALES, is_number_word, normalize, tokens, words_to_int
 from common.address import norm_address
 from interceptor.policy import Policy
 
@@ -217,6 +217,15 @@ def validate_extraction(data, transcript, directory):
     if not _cued(_norm(words), said):
         raise MandateRefused("the amount %r is not said as a maximum (at most, up to, no more than…)"
                              % words)
+    # review of 8495675: one ceiling only, never corrected, and per order
+    corrections = [c for c in CORRECTION_CUES if _said(c, said)]
+    if corrections:
+        raise MandateRefused("the mandate corrects itself (%s): say it again in one go"
+                             % ", ".join(repr(c) for c in corrections))
+    if _cued_amounts(transcript) > 1:
+        raise MandateRefused("more than one maximum amount was said: say only the limit per order")
+    if any(_said(p, said) for p in PER_ORDER) and not _per_order(_norm(words), said):
+        raise MandateRefused("the amount %r is not the limit per order" % words)
     amount = parse_amount_cents(words)
     if amount is None or amount <= 0:
         raise MandateRefused("could not read the amount %r" % words)
@@ -255,6 +264,12 @@ MAX_CUES = ("at most", "up to", "no more than", "not more than", "maximum", "max
             "limit", "limit of", "cap", "capped at", "under", "below",
             "never more than", "nothing over", "no higher than")
 NEGATIONS = ("no", "not", "never", "don", "dont", "do not")
+# Words that take back or replace what was just said: the mandate is refused.
+CORRECTION_CUES = ("no wait", "wait", "i mean", "actually", "sorry", "scratch that", "make that",
+                   "correction", "rather", "instead")
+# Phrases that tie an amount to one order; when one is said, the ceiling must be followed by it.
+PER_ORDER = ("per order", "each order", "an order", "a order", "every order", "per purchase",
+             "each purchase", "a purchase", "per po")
 
 
 def parse_amount_cents(text):
@@ -280,6 +295,40 @@ def _cued(phrase, said):
     """The amount comes right after a ceiling word ("at most fifteen hundred")."""
     window = " %s " % " ".join(_before(phrase, said, 4))
     return any(" %s " % cue in window for cue in MAX_CUES)
+
+
+def _cued_amounts(transcript):
+    """How many separate amounts are said right after a ceiling word."""
+    toks = tokens(transcript)
+    n, count, i = len(toks), 0, 0
+    while i < n:
+        t = toks[i]
+        starts = is_number_word(t) or (t == "a" and i + 1 < n and toks[i + 1] in SCALES)
+        if not starts:
+            i += 1
+            continue
+        window = " %s " % " ".join(toks[max(0, i - 4):i])
+        if any(" %s " % cue in window for cue in MAX_CUES):
+            count += 1
+        while i < n and (is_number_word(toks[i]) or toks[i] in ("a", "and")
+                         and i + 1 < n and (is_number_word(toks[i + 1]) or toks[i + 1] in SCALES)):
+            i += 1
+    return count
+
+
+def _per_order(phrase, said):
+    """The amount words end with a per-order phrase, or one comes right after
+    them (past "dollars"): "fifteen hundred dollars per order", "1,500 an order"."""
+    if any((" %s " % phrase).endswith(" %s " % p) for p in PER_ORDER):
+        return True
+    i = (" %s " % said).find(" %s " % phrase)
+    if i < 0:
+        return False
+    after = said[i + len(phrase):].split()
+    while after and after[0] in ("dollar", "dollars", "usd", "us", "bucks"):
+        after = after[1:]
+    nxt = " %s " % " ".join(after[:2])
+    return any(nxt.startswith(" %s " % p) for p in PER_ORDER)
 
 
 def _negated(phrase, said):

@@ -109,6 +109,37 @@ class MatchTests(unittest.TestCase):
             self.assertFalse(ok, said)
             self.assertIn("negation", detail)
 
+    def test_contractions_and_other_words_reject(self):
+        # review of 8495675: "isn't" split into "isn" + "t" and was accepted
+        for said in ("Twelve hundred forty dollars, ship to Larkspur Market, that isn't right",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, that isn\u2019t right",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, that isnt right",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, I can't approve that",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, I can\u2019t approve that",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, I cannot approve that",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, I won't confirm",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, I wont confirm",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, shouldn't confirm",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, didn't say that",
+                     "Twelve hundred forty dollars, ship to Larkspur Market is wrong",
+                     "Twelve hundred forty dollars, ship to Larkspur Market is incorrect"):
+            ok, detail = voice_matches(said, self.AMOUNT, self.ADDRESS)
+            self.assertFalse(ok, said)
+            self.assertIn("negation", detail, said)
+        # any word beyond the amount, the name and the filler is a doubt, and a doubt is a "no"
+        for said in ("Twelve hundred forty dollars, ship to Larkspur Market, that is right",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, but check it first",
+                     "Twelve hundred forty dollars, ship to Larkspur Market via Dock 9 Storage",
+                     "Twelve hundred forty dollars, ship to Larkspur Market, hmm"):
+            ok, detail = voice_matches(said, self.AMOUNT, self.ADDRESS)
+            self.assertFalse(ok, said)
+            self.assertIn("unexpected words", detail, said)
+        # filler is fine
+        for said in ("Yes, confirm twelve hundred forty dollars, ship to Larkspur Market, please",
+                     "OK, approve twelve hundred forty US dollars for Larkspur Market",
+                     "twelve hundred forty dollars, ship to Larkspur Market, 120 Harbor Road, Unit 4, Riverton"):
+            self.assertTrue(voice_matches(said, self.AMOUNT, self.ADDRESS)[0], said)
+
     def test_complement_inside_an_address_is_not_a_number(self):
         said = "twelve hundred forty dollars, ship to Larkspur Market, 120 Harbor Road, Unit 4"
         self.assertTrue(voice_matches(said, self.AMOUNT, self.ADDRESS)[0])

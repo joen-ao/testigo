@@ -17,8 +17,14 @@ Strict on purpose (a doubt is a "no"):
   was said before), and street addresses are ignored, in digits ("120 Harbor
   Road, Unit 4") or in words ("one twenty Harbor Road unit four"), so reading
   the address aloud never changes the amount;
-- a negation or cancel cue ("no", "not", "don't", "do not", "never",
-  "cancel", "stop", "wait") rejects the confirmation.
+- a negation or cancel cue ("no", "not", "don't", "isn't", "can't",
+  "won't", "wrong", "never", "cancel", "stop", "wait") rejects the
+  confirmation; apostrophes (' and ’) are dropped first, so "isn't" is one
+  word ("isnt"), never "isn" + "t";
+- nothing else may be said: besides the amount, the destination's name, an
+  address read aloud and a few filler words ("ship to", "dollars", "please",
+  "yes", "confirm", "approve"...), any other word rejects it ("... that is
+  right" and "... that is wrong" alike: a doubt is a "no").
 
 The voice confirms the destination's NAME, not the address digits: the address
 is checked by the pixels (F4/F5) and the signed policy (F1/F6).
@@ -29,7 +35,7 @@ Pure and offline: the transcription is real (a model), the comparison is code.
 import re
 import unicodedata
 
-from common.address import ADDRESS_RE, COMPLEMENTS, DIRECTIONALS, STREET_TYPES
+from common.address import ADDRESS_RE, CITY_WORDS, COMPLEMENTS, DIRECTIONALS, STREET_TYPES
 
 _UNITS = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
@@ -51,10 +57,20 @@ MAX_AMOUNT = 999_999_999          # dollars: "nine hundred ninety-nine million .
 # name) rejects it: "no", "not", "don't" (heard as "don t" or "dont"), "do not",
 # "never", "cancel", "stop", "wait".
 NEGATIONS = frozenset({
-    "no", "not", "nope", "nah", "don", "dont", "doesn", "doesnt", "never",
+    "no", "not", "nope", "nah", "don", "dont", "doesn", "doesnt", "didn", "didnt",
+    "isn", "isnt", "aren", "arent", "wasn", "wasnt", "cant", "cannot", "won", "wont",
+    "shouldn", "shouldnt", "wouldn", "wouldnt", "never", "wrong", "incorrect",
     "cancel", "cancels", "cancelled", "canceled", "cancelling", "canceling",
     "stop", "stopped", "halt", "abort", "wait", "hold", "reject", "deny", "refuse",
 })
+
+# The only words allowed besides the amount and the destination's name (and an
+# address read aloud, dropped by tokens()). Anything else rejects the
+# confirmation (review of 8495675: "... I can't approve that" was accepted).
+FILLER = frozenset({
+    "ship", "shipping", "to", "for", "dollar", "dollars", "usd", "us", "please", "ok", "okay",
+    "yes", "confirm", "confirmed", "approve", "approved", "the", "and", "a",
+}) | frozenset(CITY_WORDS)
 
 # A street address read aloud in words: its numbers, up to three name words
 # and the street type ("one twenty Harbor Road"), then an optional complement
@@ -71,8 +87,13 @@ def strip_accents(text):
                    if unicodedata.category(c) != "Mn")
 
 
+# An apostrophe inside a word: "isn't", "can’t", "Market's" are one word.
+_APOSTROPHE = re.compile(r"(?<=[a-z0-9])['\u2019\u2018\u02bc`\u00b4](?=[a-z])")
+
+
 def normalize(text):
     text = strip_accents(str(text or "")).lower()
+    text = _APOSTROPHE.sub("", text)
     return re.sub(r"[^a-z0-9\s]", " ", text)
 
 
@@ -94,6 +115,10 @@ def tokens(text):
 
 def _is_num(tok):
     return tok.isdigit() or tok in _WORDS
+
+
+is_number_word = _is_num
+SCALES = _SCALES
 
 
 def _drop_spoken_addresses(toks):
@@ -310,6 +335,14 @@ def negated(transcript, pixel_address_text=None):
     return [t for t in tokens(transcript) if t in NEGATIONS and t not in name]
 
 
+def unexpected_words(transcript, pixel_address_text=None):
+    """The words heard that are not the amount, the destination's name or a
+    FILLER word (an address read aloud is already dropped)."""
+    name = set(normalize(name_of(pixel_address_text)).split()) if pixel_address_text else set()
+    return [t for t in tokens(transcript)
+            if not (_is_num(t) or t in name or t in FILLER)]
+
+
 def amount_in_range(pixel_amount_cents):
     try:
         return 1 <= int(pixel_amount_cents) <= MAX_AMOUNT * 100
@@ -342,11 +375,14 @@ def voice_matches(transcript, pixel_amount_cents, pixel_address_text):
         return False, "does not match: negation heard (%s)" % " ".join(neg)
     amt, _v, why = amount_check(transcript, pixel_amount_cents, pixel_address_text)
     rec = address_matches(transcript, pixel_address_text)
-    if amt and rec:
+    extra = unexpected_words(transcript, pixel_address_text)
+    if amt and rec and not extra:
         return True, "amount and destination match"
     missing = []
     if not amt:
         missing.append("amount (%s)" % why)
     if not rec:
         missing.append("destination")
+    if extra:
+        missing.append("unexpected words heard (%s)" % " ".join(extra))
     return False, "does not match: " + ", ".join(missing)

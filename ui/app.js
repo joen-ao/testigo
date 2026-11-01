@@ -149,8 +149,13 @@ function chip(cls, icon, text, lg) { return `<span class="chip ${cls}${lg ? " lg
 function empty(title, sub) {
   return `<div class="empty"><div>${ICON.dot}<b>${esc(title)}</b>${esc(sub || "")}</div></div>`;
 }
-function allowedAddresses() {
-  return S.policy ? S.policy.deliver_only.map(p => normRead("address", p.address)) : [];
+// Did the order go to an allowed delivery point? null without a policy. Strict,
+// as interceptor/policy.py address_allowed: anything else in the field
+// ("..., Unit 4, springfield", "(c/o Dock 9 Storage)") is another delivery point.
+function toAllowedAddress(address) {
+  const rules = S.policy ? S.policy.deliver_only : [];
+  if (!rules.length) return null;
+  return rules.some(p => shipToAddress(address, p.name) === normRead("address", p.address));
 }
 // -- F8: compare by the values read from the pixels (receipts/receipt.py norm_read)
 // Real crops of unchanged content hash differently across captures, so view 6
@@ -186,8 +191,12 @@ const ADDR_SRC = `(?<![\\p{L}\\p{N}_.,$#\\-])(?<num>${ADDR_NUM})(?<sfx>[A-Za-z])
   `\\s+(?<type>${byLen(STREET_TYPES)})(?!${W})(?<dot>\\.)?`;
 const ADDRESS_RE = new RegExp(ADDR_SRC, "gu");
 const ADDRESS_AT = new RegExp(ADDR_SRC, "uy");
+// C0/C1 controls other than \t \n \v \f \r, and the BOM, are dropped first
+// (common/address.py clean): then /\s/u and Python's str.isspace() agree.
+const CONTROLS = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\ufeff]/gu;
+function clean(t) { return String(t == null ? "" : t).normalize("NFC").replace(CONTROLS, ""); }
 function fold(t) {
-  return String(t).normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  return clean(t).normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
 }
 // The buyer's name (common/config.py BUYER): exactly that after an address is the
 // label the portal shows next to the field, not part of the address.
@@ -195,7 +204,7 @@ const BUYER_NAME = "Larkspur Market";
 const BUYER_WORDS = fold(BUYER_NAME).split(" ").map(w => w.replace(/\./g, ""));
 function ocrDigits(t) { return t.replace(/[Il]/g, "1").replace(/O/g, "0").replace(/^0+(?=[0-9])/, ""); }
 const isWordStart = c => /^[\p{L}0-9]$/u.test(c);
-// [folded word without dots, first character upper-case in the text]
+// [folded word without dots, first character upper-case in the text, end index]
 function addrSegment(text, i) {
   const words = [], n = text.length;
   const at = k => String.fromCodePoint(text.codePointAt(k));
@@ -207,7 +216,7 @@ function addrSegment(text, i) {
     let j = i;
     while (j < n && (isWordStart(at(j)) || text[j] === ".")) j += at(j).length;
     const word = fold(text.slice(i, j)).replace(/\./g, "");
-    words.push([word, /^\p{Uppercase}$/u.test(at(i))]);
+    words.push([word, /^\p{Uppercase}$/u.test(at(i)), j]);
     // a full stop ends the sentence ("Unit 4. Next"), unless after a complement or directional
     if (text[j - 1] === "." && !Object.prototype.hasOwnProperty.call(COMPLEMENTS, word)
         && !Object.prototype.hasOwnProperty.call(DIRECTIONALS, word)) return words;
@@ -220,26 +229,30 @@ function addrSegment(text, i) {
 function addrTail(text, i) {
   const out = [], seg = addrSegment(text, i), words = seg.map(w => w[0]);
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  let end = i;
   for (let k = 0; k < words.length && out.length < TAIL_MAX; k++) {
     const [word, capital] = seg[k];
+    let stop = seg[k][2];
     if (words.slice(k).join(" ") === BUYER_WORDS.join(" ")) break;
-    if (CITY_WORDS.has(word)) continue;
+    if (CITY_WORDS.has(word)) { end = stop; continue; }
     if (has(COMPLEMENTS, word)) {
       out.push(COMPLEMENTS[word]);
       if (k + 1 < words.length) {
         const nxt = words[k + 1];
         out.push(/^[0-9]+$/.test(nxt) ? (nxt.replace(/^0+/, "") || "0") : nxt);
+        stop = seg[k + 1][2];
       }
       k++;
     } else if (has(DIRECTIONALS, word)) out.push(DIRECTIONALS[word]);
     else if (capital) out.push(word);
     else break;
+    end = stop;
   }
-  return out.slice(0, TAIL_MAX);
+  return [out.slice(0, TAIL_MAX), end];
 }
-function canonicalAddresses(text) {
-  text = String(text == null ? "" : text).normalize("NFC");
-  const found = new Set();
+// [canonical address, start, end] for every address in a cleaned text
+function addrMatches(text) {
+  const out = [];
   for (const m of text.matchAll(ADDRESS_RE)) {
     const g = m.groups;
     const head = [ocrDigits(g.num) + (g.sfx || "").toLowerCase()];
@@ -247,24 +260,55 @@ function canonicalAddresses(text) {
     const street = g.type.toLowerCase();
     head.push(...g.name.toLowerCase().split(/\s+/), STREET_TYPES[street]);
     // "Street." ends the sentence; "St." is an abbreviation ("St., Unit 4")
-    const ends = g.dot && STREET_TYPES[street] === street;
-    found.add(head.concat(ends ? [] : addrTail(text, m.index + m[0].length)).join(" "));
+    const at = m.index + m[0].length;
+    const [tail, end] = g.dot && STREET_TYPES[street] === street ? [[], at] : addrTail(text, at);
+    out.push([head.concat(tail).join(" "), m.index, end]);
   }
-  return [...found].sort();
+  return out;
 }
-// The amount in integer cents (receipts/receipt.py _amount_cents): the largest
-// number in the text; a final 2-digit part after "." or "," is the cents, a
-// separator before 3 digits groups thousands: "USD 1,240.00" and "1240" -> "124000".
-function amountCents(text) {
-  let best = "";
-  for (let n of text.match(/[0-9]+(?:[.,\s][0-9]{3}(?![0-9]))*(?:[.,][0-9]{2}(?![0-9]))?/g) || []) {
-    n = n.replace(/\s/g, "");
-    const m = /^(.*)[.,]([0-9]{2})$/.exec(n);
-    const dollars = (m ? m[1] : n).replace(/[^0-9]/g, ""), cents = m ? m[2] : "00";
-    const v = (BigInt(dollars || "0") * 100n + BigInt(cents)).toString();
-    if (v.length > best.length || (v.length === best.length && v > best)) best = v;
+function canonicalAddresses(text) {
+  return [...new Set(addrMatches(clean(text)).map(f => f[0]))].sort();
+}
+// The protected "Ship to" crop (common/address.py ship_to_address): its
+// addresses joined by ",", or null when anything but the label "Ship to", the
+// city and the destination's exact name is left besides separators.
+const SHIP_TO_LABEL = "ship to";
+const reEscape = d => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function shipToAddress(text, name) {
+  text = clean(text);
+  const found = addrMatches(text);
+  if (!found.length) return null;
+  const rest = [];
+  let last = 0;
+  for (const [, start, end] of found.slice().sort((a, b) => a[1] - b[1])) {
+    rest.push(text.slice(last, start));
+    last = end;
   }
-  return best;
+  rest.push(text.slice(last));
+  let left = " " + fold(rest.join(" , ")) + " ";
+  const drops = [SHIP_TO_LABEL, ...[...CITY_WORDS].sort()];
+  if (fold(name || "")) drops.push(fold(name));
+  for (const d of drops) left = left.replace(new RegExp(`(?<![0-9a-z])${reEscape(d)}(?![0-9a-z])`, "g"), " ");
+  if (!/^[\s,.:·—–\-]*$/u.test(left)) return null;
+  return [...new Set(found.map(f => f[0]))].sort().join(",");
+}
+// The amount in integer cents as ONE amount (receipts/receipt.py _amount_cents):
+// optional label ("Total", "Order total"), optional "USD"/"US$"/"$", digits with
+// optional "," thousands groups of 3 and optional ".dd"; I/l/O read as 1/1/0 in
+// the digits. Anything else (a second number, another separator) -> null.
+const AMOUNT_LABELS = ["order total", "grand total", "total due", "amount due", "subtotal", "total", "amount"];
+const AMOUNT_RE = new RegExp(
+  `^(?:(?:${AMOUNT_LABELS.map(l => ci(l).replace(/ /g, "\\s+")).join("|")})\\s*:?\\s*)?` +
+  `(?:(?:${ci("usd")}|${ci("us")}\\$)\\s*|\\$\\s*)?` +
+  "(?<num>[0-9IlO][0-9IlO,]*(?:\\.[0-9IlO]{2})?)$", "u");
+function amountCents(text) {
+  const t = clean(text).split(/\s+/u).filter(Boolean).join(" ");
+  const m = AMOUNT_RE.exec(t);
+  if (!m || !/[0-9]/.test(m.groups.num)) return null;
+  const num = m.groups.num.replace(/[Il]/g, "1").replace(/O/g, "0");
+  if (!/^(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{2})?$/.test(num)) return null;
+  const [dollars, cents] = num.split(".");
+  return (BigInt(dollars.replace(/,/g, "")) * 100n + BigInt(cents || "0")).toString();
 }
 function normRead(name, text) {
   if (text == null) return null;
@@ -272,7 +316,7 @@ function normRead(name, text) {
   if (name === "amount") return amountCents(text);
   const found = canonicalAddresses(text);
   if (found.length) return found.join(",");
-  return text.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return clean(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 const FIELDS = ["amount", "address"];
 function readOf(e, side) { return ((e && e.read) || {})[side] || {}; }
@@ -725,8 +769,7 @@ const render = {
     if (!r.mode) return `<h1 class="title">Without TESTIGO+</h1><p class="lede">The same task with the supervisor switched off.</p>` +
       empty("No unsupervised run yet", "Run the agent with --no-supervisor to show the “before”.");
     const order = r.order;
-    const allowed = allowedAddresses();
-    const wrong = order && allowed.length && !allowed.includes(normRead("address", order.address));
+    const wrong = order && toAllowedAddress(order.address) === false;
     let alert = "";
     if (order && wrong) {
       alert = `<div class="alert">${ICON.stop}<div><div class="t">Order confirmed for delivery to ${esc(order.address)} — ${esc(usd(order.amount_cents))}</div>

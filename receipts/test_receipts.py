@@ -609,16 +609,27 @@ class ReadNormalizationTests(unittest.TestCase):
         # review of cebf0f4: Python's \d also takes other scripts' digits, the
         # ui/app.js port does not
         self.assertEqual(norm_read("address", "١٢٠ Harbor Road"), "١٢٠harborroad")
-        self.assertEqual(norm_read("amount", "USD ١٢٤٠.00"), "0")
-        self.assertEqual(norm_read("amount", "USD ١٢٤٠"), "")
+        self.assertIsNone(norm_read("amount", "USD ١٢٤٠.00"))
+        self.assertIsNone(norm_read("amount", "USD ١٢٤٠"))
 
     def test_amounts(self):
         from receipts.receipt import norm_read
-        for s in ("USD 1,240.00", "$1,240", "1240.00", "1240", "Total USD 1,240.00 Simulation",
-                  "$1.240,00", "Total: USD 1,240.00 (3 items)", "1 240.00"):
+        for s in ("USD 1,240.00", "$1,240", "1240.00", "1240", "Total USD 1,240.00", "Total: USD 1,240.00",
+                  "Order total US$ 1,240.00", "$ 1,240.00", "usd 1,240.00", "USD 1,24O.00", "USD l,240.00"):
             self.assertEqual(norm_read("amount", s), "124000", s)
         self.assertEqual(norm_read("amount", "USD 1,240.50"), "124050")
         self.assertNotEqual(norm_read("amount", "USD 1,250.00"), "124000")
+
+    def test_amount_is_one_strict_amount(self):
+        # review of 8495675: the largest number was taken, so an unknown
+        # thousands separator under-read the total. Now: one amount or None.
+        for s in ("USD 12'400.00", "USD 12, 400.00", "USD 12\u00b7400.00", "USD 1,24,000.00",
+                  "$1.240,00", "1 240.00", "Total USD 1,240.00 (3 items)", "Total USD 1,240.00 Simulation",
+                  "USD 1,240.00 USD 5.00", "USD 5 1,240.00", "1,2400.00", "1240.0", "1240.000",
+                  "", "USD", "IO", "USD -1,240.00", "USD 1,240.00!"):
+            self.assertIsNone(norm_read("amount", s), s)
+        # I/l/O in the digit run read as 1/1/0, so a misread total is never smaller
+        self.assertEqual(norm_read("amount", "USD 12,4OO.00"), "1240000")
 
 
 if __name__ == "__main__":

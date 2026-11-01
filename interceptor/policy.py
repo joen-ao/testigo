@@ -92,12 +92,14 @@ class Policy:
         another address does not pass (review of F4). The name compares
         regardless of Unicode form, accents, case and spacing ("LARKSPUR
         MARKET", "Larkspur  Market")."""
-        from common.address import fold
+        from common.address import fold, ship_to_address
         from receipts.receipt import norm_read
         t = fold(address_text)
-        addresses = norm_read("address", address_text or "")
+        # strict: besides the address only "Ship to", the city and the exact
+        # name may be in the crop (review of 8495675: "..., Unit 4, springfield",
+        # "... Unit 4 (c/o Dock 9 Storage)" are other delivery points)
         return any(fold(p["name"]) and fold(p["name"]) in t
-                   and addresses == norm_read("address", p["address"])
+                   and ship_to_address(address_text, p["name"]) == norm_read("address", p["address"])
                    for p in self.deliver_only)
 
     def allowed_addresses(self):
@@ -105,8 +107,8 @@ class Policy:
         return {norm_read("address", p["address"]) for p in self.deliver_only}
 
     def amount_allowed(self, amount_cents):
-        """Integer cents, both sides."""
-        return 0 < int(amount_cents) <= self.max_per_order_cents
+        """Integer cents, both sides; an unreadable amount (None) is not allowed."""
+        return amount_cents is not None and 0 < int(amount_cents) <= self.max_per_order_cents
 
     def check_order(self, address_text, amount_cents):
         """Return (ok, reason). reason is a short human string when not ok."""

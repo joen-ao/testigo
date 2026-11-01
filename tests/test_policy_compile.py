@@ -221,6 +221,38 @@ class MandateTests(unittest.TestCase):
         t3 = "Ship to our warehouse, no more than fifteen hundred dollars an order"
         self.assertEqual(Policy(self.compile(GOOD, t3)[0]).max_per_order_cents, 150000)
 
+    def test_ceiling_must_be_the_one_per_order_amount(self):
+        # review of 8495675: a monthly budget, or a corrected amount, was taken as the per-order limit
+        t = ("Only ship to our warehouse, the budget is up to twenty thousand dollars a month, "
+             "at most fifteen hundred dollars per order")
+        for words, n in (("twenty thousand dollars", 20000), ("fifteen hundred dollars", 1500)):
+            with self.subTest(words=words):
+                with self.assertRaises(MandateRefused):
+                    self.compile(with_(max_amount_words=words, max_per_order_dollars=n), t)
+        for t in ("Only ship to our warehouse, at most fifteen hundred, no wait, at most twelve hundred per order",
+                  "Only ship to our warehouse, at most fifteen hundred per order, I mean twelve hundred",
+                  "Only ship to our warehouse, at most fifteen hundred per order, actually twelve hundred",
+                  "Only ship to our warehouse, at most fifteen hundred per order, sorry, twelve hundred",
+                  "Only ship to our warehouse, at most fifteen hundred per order, scratch that"):
+            for words, n in (("fifteen hundred", 1500), ("twelve hundred", 1200)):
+                with self.subTest(t=t, words=words):
+                    with self.assertRaises(MandateRefused):
+                        self.compile(with_(max_amount_words=words, max_per_order_dollars=n), t)
+        # a cued amount that is not the per-order one
+        t = "Only ship to our warehouse, up to twenty thousand dollars a month; per order use judgement"
+        with self.assertRaises(MandateRefused):
+            self.compile(with_(max_amount_words="twenty thousand dollars", max_per_order_dollars=20000), t)
+        # the demo phrasings still compile
+        for t, words in ((PHRASE, "fifteen hundred dollars"),
+                         ("Only ship to our warehouse, no more than fifteen hundred dollars an order",
+                          "fifteen hundred dollars"),
+                         ("Ship to our warehouse up to 1,500 dollars", "1,500 dollars"),
+                         ("Only ship to our warehouse, each order at most fifteen hundred dollars per order",
+                          "fifteen hundred dollars")):
+            with self.subTest(t=t):
+                pol, _ = self.compile(with_(max_amount_words=words), t)
+                self.assertEqual(Policy(pol).max_per_order_cents, 150000)
+
     def test_destination_in_a_negative_is_refused(self):
         for t in ("Don't ship to our warehouse, at most fifteen hundred dollars",
                   "Do not ship to our warehouse, at most fifteen hundred dollars per order",

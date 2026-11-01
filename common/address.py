@@ -29,6 +29,13 @@ confirm", "... 88 Mill St instead") is not read as part of it. The city
 is left (the portal shows the delivery point's name right after the address
 field: "120 Harbor Road, Unit 4, Riverton Larkspur Market").
 
+That leniency is for free text (stray and attacker addresses on screen). The
+protected "Ship to" crop that allows an order is read strictly by
+`ship_to_address(text, name)`: after the address only the label "Ship to",
+the city and the destination's exact name may remain; anything else
+(", springfield", "(c/o Dock 9 Storage)", "; Dock 9", ", 2nd floor") makes it
+another delivery point (review of 8495675).
+
 `canonical_addresses(text)` gives every address in the text as
 "120 harbor road unit 4" / "88 mill street", sorted and without duplicates.
 Standard library only, so the portal can use it too. ui/app.js ports these
@@ -78,10 +85,22 @@ ADDRESS_RE = re.compile(
 _OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "O": "0"})
 
 
+# C0/C1 control characters other than \t \n \v \f \r, and the BOM: dropped
+# before anything is compared, so Python (str.isspace) and ui/app.js (/\s/u)
+# treat the same characters as spacing (\x1c-\x1f and \x85 are spaces for
+# Python only, the BOM for JavaScript only).
+_CONTROLS = re.compile("[\x00-\x08\x0e-\x1f\x7f-\x9f\ufeff]")
+
+
+def clean(text):
+    """NFC, without control characters and the BOM (see _CONTROLS)."""
+    return _CONTROLS.sub("", unicodedata.normalize("NFC", str(text or "")))
+
+
 def fold(text):
     """Text compared regardless of Unicode form, accents, case and spacing:
     "LARKSPUR  market" == "Larkspur Market"."""
-    text = unicodedata.normalize("NFKD", str(text or ""))
+    text = unicodedata.normalize("NFKD", clean(text))
     text = "".join(c for c in text if unicodedata.category(c) != "Mn")
     return " ".join(text.lower().split())
 
@@ -102,8 +121,8 @@ def _is_word_start(c):
 def _segment(text, i):
     """The words after an address at text[i:], up to a punctuation mark other
     than "," and ".", the next address, or the end, as (folded without dots,
-    capitalized in the text). A word ending in "." ends the segment, unless it
-    is a complement or a directional ("Ste.", "N.")."""
+    capitalized in the text, end index in the text). A word ending in "." ends
+    the segment, unless it is a complement or a directional ("Ste.", "N.")."""
     words, n = [], len(text)
     while True:
         while i < n and (text[i].isspace() or text[i] == ","):
@@ -114,19 +133,20 @@ def _segment(text, i):
         while j < n and (_is_word_start(text[j]) or text[j] == "."):
             j += 1
         word = fold(text[i:j]).replace(".", "")
-        words.append((word, text[i].isupper()))
+        words.append((word, text[i].isupper(), j))
         if text[j - 1] == "." and word not in _ABBREVIATIONS:
             return words                 # a full stop ends the sentence ("Unit 4. Next")
         i = j
 
 
 def _tail(text, i):
-    """The words that follow an address and belong to it (module docstring)."""
-    out, segment = [], _segment(text, i)
-    words = [w for w, _ in segment]
+    """The words that follow an address and belong to it (module docstring),
+    and the index in `text` where they end."""
+    out, segment, end = [], _segment(text, i), i
+    words = [w for w, _, _ in segment]
     k = 0
     while k < len(words) and len(out) < TAIL_MAX:
-        word, capital = segment[k]
+        word, capital, stop = segment[k]
         if words[k:] == _BUYER_WORDS:
             break
         if word in CITY_WORDS:
@@ -136,6 +156,7 @@ def _tail(text, i):
             if k + 1 < len(words):
                 nxt = words[k + 1]
                 out.append(_digits(nxt) if nxt.isdigit() else nxt)
+                stop = segment[k + 1][2]
             k += 1
         elif word in DIRECTIONALS:
             out.append(DIRECTIONALS[word])
@@ -143,14 +164,14 @@ def _tail(text, i):
             out.append(word)
         else:
             break
+        end = stop
         k += 1
-    return out[:TAIL_MAX]
+    return out[:TAIL_MAX], end
 
 
-def canonical_addresses(text):
-    """Every address in `text`, canonical ("88 mill street"), sorted, unique."""
-    text = unicodedata.normalize("NFC", str(text or ""))
-    found = set()
+def _matches(text):
+    """(canonical address, start, end) for every address in `text` (cleaned)."""
+    out = []
     for m in ADDRESS_RE.finditer(text):
         head = [_digits(m.group("num")) + (m.group("sfx") or "").lower()]
         if m.group("pre"):
@@ -159,9 +180,52 @@ def canonical_addresses(text):
         street = m.group("type").lower()
         head.append(STREET_TYPES[street])
         # "Street." ends the sentence; "St." is an abbreviation ("St., Unit 4")
-        ends = m.group("dot") and STREET_TYPES[street] == street
-        found.add(" ".join(head + ([] if ends else _tail(text, m.end()))))
-    return sorted(found)
+        if m.group("dot") and STREET_TYPES[street] == street:
+            tail, end = [], m.end()
+        else:
+            tail, end = _tail(text, m.end())
+        out.append((" ".join(head + tail), m.start(), end))
+    return out
+
+
+def canonical_addresses(text):
+    """Every address in `text`, canonical ("88 mill street"), sorted, unique."""
+    return sorted({a for a, _, _ in _matches(clean(text))})
+
+
+# What may be left of a protected "Ship to" crop besides the address: the
+# label, the city, the destination's exact name and separators. Anything else
+# (a lower-case word, a note in brackets, "; Dock 9", "2nd floor") makes it
+# another delivery point.
+SHIP_TO_LABEL = "ship to"
+_SEPARATORS = re.compile(r"^[\s,.:\u00b7\u2014\u2013\-]*$")
+
+
+def ship_to_address(text, name):
+    """The canonical addresses of a protected "Ship to" crop joined by ","
+    (as norm_address), or None when anything else is left after them: only
+    the label "Ship to", the city ("Riverton") and the destination's exact
+    `name` may remain, with separators. Used for the equality check that
+    allows an order; free text (stray addresses, attack detection) keeps the
+    lenient canonical_addresses."""
+    text = clean(text)
+    found = _matches(text)
+    if not found:
+        return None
+    rest, last = [], 0
+    for _a, start, end in sorted(found, key=lambda f: f[1]):
+        rest.append(text[last:start])
+        last = end
+    rest.append(text[last:])
+    left = " %s " % fold(" , ".join(rest))
+    drops = [SHIP_TO_LABEL] + sorted(CITY_WORDS)
+    if fold(name):
+        drops.append(fold(name))
+    for d in drops:
+        left = re.sub(r"(?<![0-9a-z])%s(?![0-9a-z])" % re.escape(d), " ", left)
+    if not _SEPARATORS.match(left):
+        return None
+    return ",".join(sorted({a for a, _, _ in found}))
 
 
 def norm_address(text):
@@ -172,7 +236,7 @@ def norm_address(text):
     found = canonical_addresses(text)
     if found:
         return ",".join(found)
-    return re.sub(r"[\W_]+", "", unicodedata.normalize("NFC", str(text)).lower())
+    return re.sub(r"[\W_]+", "", clean(text).lower())
 
 
 def squash(text):

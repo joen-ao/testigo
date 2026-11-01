@@ -74,6 +74,16 @@ class Interceptor:
                 reason=reason,
             )
 
+        # Rule 1b: the amount must read as exactly one amount (receipts.receipt
+        # _amount_cents); an odd separator or a second number is not guessed.
+        if _amount_from(by_label["amount"]["text"]) is None:
+            reason = "the amount on screen is not one readable amount: %r" % by_label["amount"]["text"]
+            return Decision(
+                ev.CANNOT_VERIFY, True,
+                ev.check_result(capture.frame, ev.CANNOT_VERIFY, regions, [], [], lat, reason),
+                reason=reason,
+            )
+
         # Rule 2: divergence (both directions)
         code_only, pixels_only = self._divergence(capture)
         if code_only or pixels_only:
@@ -181,9 +191,12 @@ class Interceptor:
         if stray:
             policy_reason = "an address not in the deliver-only list is on screen: %s" % ", ".join(stray)
         elif "address" in by_label and "amount" in by_label:
-            ok, why = self.policy.check_order(by_label["address"]["text"],
-                                              _amount_from(by_label["amount"]["text"]))
-            policy_reason = "" if ok else why
+            amount = _amount_from(by_label["amount"]["text"])
+            if amount is None:
+                policy_reason = "the amount on screen is not one readable amount"
+            else:
+                ok, why = self.policy.check_order(by_label["address"]["text"], amount)
+                policy_reason = "" if ok else why
         return {"regions": regions, "code_only_text": code_only, "pixels_only_text": pixels_only,
                 "policy_reason": policy_reason, "latency_ms": latency}
 
@@ -255,10 +268,11 @@ def _dedupe(xs):
 
 
 def _amount_from(text):
-    """The amount read from the pixels, in integer cents ("USD 1,240.00" -> 124000)."""
+    """The amount read from the pixels, in integer cents ("USD 1,240.00" ->
+    124000), or None when it is not exactly one readable amount."""
     from receipts.receipt import norm_read
     cents = norm_read("amount", text or "")
-    return int(cents) if cents else 0
+    return int(cents) if cents else None
 
 
 def _is_confirm(action):

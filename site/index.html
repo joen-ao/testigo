@@ -39,22 +39,41 @@ h2 em,h1 em{color:var(--teal)}
 .btn-ghost:hover{border-color:var(--teal)}
 .mono{font-family:var(--mono)}
 
-/* nav */
-.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgba(11,15,20,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.nav .wrap{display:flex;align-items:center;gap:28px;min-height:66px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--mono);font-weight:600;letter-spacing:.06em}
-.links{display:flex;gap:26px;flex-grow:1}
-.links a{color:var(--muted);text-decoration:none;font-size:15px}
+/* nav: brand | centered capsule with a sliding indicator | action. Clear over the hero, solid once scrolled. */
+.nav{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:50;border-bottom:1px solid transparent;transition:background .35s,border-color .35s,backdrop-filter .35s}
+.nav.scrolled{background:rgba(11,15,20,.86);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);border-bottom-color:var(--line)}
+.nav .wrap{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:20px;min-height:76px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;justify-self:start}
+.brand .mark{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(160deg,#16302C,#0E1C1A);border:1px solid rgba(60,201,169,.35)}
+.brand .name{display:flex;flex-direction:column;line-height:1.1}
+.brand .name b{font-family:var(--mono);font-weight:600;letter-spacing:.08em;font-size:15px}
+.brand .name small{font-size:11px;color:var(--faint);letter-spacing:.02em}
+.links{position:relative;display:flex;gap:2px;padding:5px;border-radius:999px;background:rgba(17,24,33,.7);border:1px solid var(--line)}
+.links a{position:relative;z-index:1;color:var(--muted);text-decoration:none;font-size:14.5px;font-weight:500;padding:8px 15px;border-radius:999px;transition:color .25s;white-space:nowrap}
 .links a:hover{color:var(--fg)}
-.nav .btn{min-height:42px;padding:0 18px;font-size:14px}
-.menu-btn{display:none;background:none;border:1px solid var(--line);color:var(--fg);min-height:42px;min-width:44px;border-radius:8px;cursor:pointer}
-@media (max-width:860px){
-  .links{display:none;position:absolute;left:0;right:0;top:66px;flex-direction:column;gap:0;background:var(--ink-2);border-bottom:1px solid var(--line);padding:8px calc(var(--gutter-r) + 8px) 16px calc(var(--gutter-l) + 8px)}
-  .links.open{display:flex}
-  .links a{padding:14px 0;border-bottom:1px solid var(--line)}
-  .menu-btn{display:inline-flex;align-items:center;justify-content:center;margin-left:auto}
-  .nav .wrap{gap:12px}
-  .nav .btn{display:none}
+.links a.active{color:#062A22}
+.links .pill{position:absolute;z-index:0;top:5px;bottom:5px;left:0;width:100px;border-radius:999px;background:var(--teal);opacity:0;transform-origin:0 50%;transition:transform .45s cubic-bezier(.2,.7,.2,1),opacity .3s}
+.nav-end{justify-self:end;display:flex;align-items:center;gap:8px}
+.nav-end .gh{color:var(--muted);text-decoration:none;font-size:14.5px;font-weight:500;padding:10px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.nav-end .gh:hover{color:var(--fg)}
+.nav .btn{min-height:44px;padding:0 20px;font-size:14.5px}
+.menu-btn{display:none;background:transparent;border:1px solid var(--line);color:var(--fg);width:46px;height:46px;border-radius:12px;cursor:pointer;position:relative}
+.menu-btn span{position:absolute;left:13px;right:13px;height:2px;border-radius:2px;background:currentColor;transition:transform .3s,opacity .2s}
+.menu-btn span:nth-child(1){top:16px}.menu-btn span:nth-child(2){top:22px}.menu-btn span:nth-child(3){top:28px}
+.menu-btn[aria-expanded="true"] span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.menu-btn[aria-expanded="true"] span:nth-child(2){opacity:0}
+.menu-btn[aria-expanded="true"] span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+@media (max-width:1060px){.nav-end .gh{display:none}.links a{padding:8px 11px}}
+@media (max-width:900px){
+  .nav .wrap{grid-template-columns:1fr auto}
+  .nav{background:rgba(11,15,20,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom-color:var(--line)}
+  .links{display:none;position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 77px);bottom:0;flex-direction:column;gap:4px;border-radius:0;border:0;background:var(--ink);padding:20px calc(var(--gutter-r) + 8px) 24px calc(var(--gutter-l) + 8px)}
+  .links.open{display:flex;animation:rise .35s cubic-bezier(.2,.7,.2,1) both}
+  .links a{font-family:var(--display);font-size:38px;color:var(--fg);padding:10px 0;border-radius:0;border-bottom:1px solid var(--line)}
+  .links a.active{color:var(--teal)}
+  .links .pill{display:none}
+  .menu-btn{display:block}
+  .nav-end .btn{display:none}
 }
 
 /* hero */
@@ -156,25 +175,39 @@ h2 em,h1 em{color:var(--teal)}
 .exhibit:hover .forged,.exhibit:focus-within .forged,.exhibit.lit .forged{color:var(--amber-ink);background:#FBF1DE}
 .hint{font-family:var(--mono);font-size:12px;color:var(--paper-muted)}
 
-/* pipeline */
-.how .wrap{display:flex;flex-direction:column;gap:56px}
-.pipe{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);gap:22px;align-items:stretch}
-@media (max-width:860px){.pipe{grid-template-columns:minmax(0,1fr)}.packet{display:none}}
-.node{border:1px solid var(--line);background:var(--ink-2);border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1}
-.node .who{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--faint)}
-.node .what{font-family:var(--display);font-size:32px;line-height:1.05}
-.node p{margin:0;color:var(--muted);font-size:15px}
-.node.gate{border-color:var(--teal);background:#0E1C1A;animation:gate 4.8s ease-in-out infinite}
-.node.gate .who{color:var(--teal)}
-@keyframes gate{0%,30%,70%,100%{box-shadow:0 0 0 0 rgba(60,201,169,0)}45%,55%{box-shadow:0 0 0 10px rgba(60,201,169,.16)}}
-.track{position:absolute;left:8%;right:8%;top:50%;height:1px;background:linear-gradient(90deg,transparent,#2E3A48 10%,#2E3A48 90%,transparent);z-index:0}
-.packet{position:absolute;top:50%;left:6%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:var(--teal);box-shadow:0 0 16px rgba(60,201,169,.8);z-index:2;animation:packet 4.8s cubic-bezier(.6,0,.4,1) infinite}
-@keyframes packet{0%{left:6%;opacity:0}8%{opacity:1}40%{left:48.5%}60%{left:48.5%}92%{opacity:1}100%{left:92%;opacity:0}}
-.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:32px;counter-reset:s}
-.steps li{display:flex;flex-direction:column;gap:8px;counter-increment:s}
-.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--display);font-size:56px;line-height:1;color:#334152}
-.steps strong{font-size:19px;font-weight:600}
-.steps span{color:var(--muted)}
+/* how it works: one timeline, five stages; the order travels along the line and waits at TESTIGO+ */
+.how .wrap{display:flex;flex-direction:column;gap:64px}
+.timeline{position:relative;list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px}
+.timeline .rail{position:absolute;left:10%;right:10%;top:22px;height:2px;background:#26313E;border-radius:2px}
+.timeline .rail i{position:absolute;inset:0;background:var(--teal);border-radius:2px;transform-origin:0 50%;transform:scaleX(0);animation:fill 6s cubic-bezier(.6,0,.4,1) infinite}
+@keyframes fill{0%{transform:scaleX(0);opacity:1}45%,62%{transform:scaleX(.5)}92%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
+.timeline .runner{position:absolute;top:16px;left:10%;right:10%;height:14px;container-type:inline-size;z-index:2;pointer-events:none}
+.timeline .runner::before{content:"";position:absolute;left:-7px;top:0;width:14px;height:14px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 5px rgba(60,201,169,.18),0 0 18px rgba(60,201,169,.7);animation:run 6s cubic-bezier(.6,0,.4,1) infinite}
+@keyframes run{0%{transform:translateX(0);opacity:0}6%{opacity:1}45%,62%{transform:translateX(50cqw)}92%{transform:translateX(100cqw);opacity:1}100%{transform:translateX(100cqw);opacity:0}}
+.stage{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:0 4px}
+.stage .dot{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--ink-2);border:1px solid #2E3A48;color:var(--muted);font-family:var(--mono);font-size:13px;position:relative;z-index:1}
+.stage .who{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--faint);margin-top:8px}
+.stage h3{font-size:19px;font-weight:600;line-height:1.3}
+.stage p{margin:0;color:var(--muted);font-size:15px;max-width:22ch}
+.stage .model{font-family:var(--mono);font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin-top:4px}
+.stage.gate{background:linear-gradient(180deg,rgba(60,201,169,.10),rgba(60,201,169,0) 75%);border:1px solid rgba(60,201,169,.35);border-radius:18px;padding:0 10px 22px;margin-top:-14px;padding-top:14px}
+.stage.gate .dot{background:var(--teal);border-color:var(--teal);color:#062A22;animation:wait 6s ease-in-out infinite}
+@keyframes wait{0%,40%,68%,100%{box-shadow:0 0 0 0 rgba(60,201,169,0)}48%,60%{box-shadow:0 0 0 12px rgba(60,201,169,.2)}}
+.stage.gate .who{color:var(--teal)}
+.stage.gate .model{border-color:rgba(60,201,169,.4);color:var(--fg)}
+.timeline-note{display:flex;flex-wrap:wrap;gap:10px 28px;justify-content:center;font-size:14px;color:var(--faint)}
+.timeline-note b{color:var(--muted);font-weight:500}
+@media (max-width:900px){
+  .timeline{grid-template-columns:minmax(0,1fr);gap:28px;padding-left:4px}
+  .timeline .rail{left:22px;right:auto;top:22px;bottom:22px;width:2px;height:auto}
+  .timeline .rail i,.timeline .runner{display:none}
+  .stage{display:grid;grid-template-columns:46px minmax(0,1fr);column-gap:18px;row-gap:4px;text-align:left;align-items:start;padding:0}
+  .stage .dot{grid-row:span 4}
+  .stage .who{margin-top:2px}
+  .stage p{max-width:none}
+  .stage .model{justify-self:start}
+  .stage.gate{margin-top:0;padding:14px 12px;margin-left:-12px}
+}
 
 /* proof */
 .proof{background:var(--ink-2);border-block:1px solid var(--line)}
@@ -234,11 +267,12 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#top">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3CC9A9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3"/><path d="m8 12 3 3 5-6"/></svg>
-      TESTIGO+
+    <a class="brand" href="#top" aria-label="TESTIGO+ home">
+      <span class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3CC9A9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3"/><path d="m8 12 3 3 5-6"/></svg></span>
+      <span class="name"><b>TESTIGO+</b><small>Witness for AI agents</small></span>
     </a>
     <nav class="links" id="links" aria-label="Main">
+      <span class="pill" aria-hidden="true"></span>
       <a href="#demo">Demo</a>
       <a href="#threats">Threats</a>
       <a href="#how">How it works</a>
@@ -246,10 +280,14 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
       <a href="#results">Results</a>
       <a href="#limits">Limits</a>
     </nav>
-    <a class="btn btn-primary" href="#start">Try the demo</a>
-    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="links" aria-label="Open menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-    </button>
+    <div class="nav-end">
+      <a class="gh" href="https://github.com/joen-ao/testigo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.84c.85 0 1.7.11 2.5.34 1.9-1.29 2.74-1.02 2.74-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>
+        Code
+      </a>
+      <a class="btn btn-primary" href="#start">Try the demo</a>
+      <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="links" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
   </div>
 </header>
 
@@ -378,21 +416,18 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
         <span class="eyebrow">How it works</span>
         <h2 id="how-title">Trust the screen, <em>not the story.</em></h2>
       </div>
-      <p class="lede">Ordinary clicks pass straight through. Sensitive ones, like Confirm order, wait at TESTIGO+ until the pixels and your rules agree.</p>
+      <p class="lede">Five steps from your rules to a receipt. You act in two of them.</p>
     </div>
-    <div class="pipe reveal">
-      <span class="track" aria-hidden="true"></span>
-      <span class="packet" aria-hidden="true"></span>
-      <div class="node"><span class="who">AGENT</span><span class="what">Muse Wonder</span><p>Proposes the next click on the supplier portal.</p></div>
-      <div class="node gate"><span class="who">TESTIGO+</span><span class="what">Checks the pixels</span><p>SAM 3.1 finds the total, address and button. Muse Spark reads each crop. Your signed rules decide. Code and pixels must agree.</p></div>
-      <div class="node"><span class="who">BROWSER</span><span class="what">The click runs</span><p>Only when everything matches, or a person approves.</p></div>
-    </div>
-    <ol class="steps">
-      <li class="reveal"><strong>Sign your rules</strong><span>“Only ship to our warehouse, at most fifteen hundred dollars per order.” Muse Voice transcribes it and the policy is signed.</span></li>
-      <li class="reveal"><strong>Witness each sensitive click</strong><span>The screen is read before Confirm. Hidden or painted instructions show up as a mismatch.</span></li>
-      <li class="reveal"><strong>Confirm what is real</strong><span>You see the exact crops and read them aloud. Your voice has to match the pixels.</span></li>
-      <li class="reveal"><strong>Prove it afterwards</strong><span>The result is read again after the click and sealed in an Ed25519-signed receipt.</span></li>
+    <ol class="timeline reveal">
+      <li class="rail" aria-hidden="true"><i></i></li>
+      <li class="runner" aria-hidden="true"></li>
+      <li class="stage"><span class="dot">1</span><span class="who">YOU</span><h3>Say your rules</h3><p>“Only ship to our warehouse, at most $1,500 per order.” They are signed.</p><span class="model">Muse Voice</span></li>
+      <li class="stage"><span class="dot">2</span><span class="who">AGENT</span><h3>The agent works</h3><p>It restocks on the supplier portal, one click at a time.</p><span class="model">Muse Wonder</span></li>
+      <li class="stage gate"><span class="dot">3</span><span class="who">TESTIGO+</span><h3>The screen is checked</h3><p>Before Confirm it finds and reads the total and address, then checks your rules and the page code.</p><span class="model">SAM 3.1 · Muse Spark</span></li>
+      <li class="stage"><span class="dot">4</span><span class="who">YOU</span><h3>You confirm what’s real</h3><p>Read the exact crops aloud. Your voice must match the pixels.</p><span class="model">Muse Voice</span></li>
+      <li class="stage"><span class="dot">5</span><span class="who">RECEIPT</span><h3>Proof afterwards</h3><p>The result is read again and sealed in a signed receipt.</p><span class="model">Ed25519</span></li>
     </ol>
+    <p class="timeline-note reveal"><span><b>Ordinary clicks</b> skip step 3.</span><span><b>A mismatch</b> holds the order at step 3 for a person.</span></p>
   </div>
 </section>
 
@@ -496,6 +531,32 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
   links.addEventListener("click", function (e) {
     if (e.target.tagName === "A") { links.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); }
   });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && links.classList.contains("open")) { links.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); menuBtn.focus(); }
+  });
+
+  // nav: solid once scrolled; the pill follows the section in view
+  var nav = document.querySelector(".nav"), pill = links.querySelector(".pill");
+  var navLinks = Array.prototype.slice.call(links.querySelectorAll("a"));
+  function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 24); }
+  window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  function movePill(a) {
+    navLinks.forEach(function (l) { l.classList.toggle("active", l === a); if (l === a) l.setAttribute("aria-current", "true"); else l.removeAttribute("aria-current"); });
+    if (!a) { pill.style.opacity = "0"; return; }
+    pill.style.transform = "translateX(" + a.offsetLeft + "px) scaleX(" + (a.offsetWidth / 100) + ")";
+    pill.style.opacity = "1";
+  }
+  if ("IntersectionObserver" in window) {
+    var byId = {};
+    navLinks.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) movePill(byId[en.target.id] || null);
+      });
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    document.querySelectorAll("main > section").forEach(function (s) { spy.observe(s); });
+    window.addEventListener("resize", function () { movePill(links.querySelector("a.active")); });
+  }
 
   // hero cycle: scan -> boxes -> tamper -> held (the default, readable state)
   var sheet = document.getElementById("sheet"), verdict = document.getElementById("verdict");
@@ -534,30 +595,58 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
     ok: [["receipt.json"], ["1 signature ............ ", "valid", "ok"], ["2 policy ............... ", "signed, hash matches", "ok"], ["3 evidence hashes ...... ", "match", "ok"], ["4 executed = approved .. ", "yes", "ok"]],
     bad: [["swapped.json"], ["1 signature ............ ", "valid", "ok"], ["2 policy ............... ", "signed, hash matches", "ok"], ["3 evidence hashes ...... ", "match", "ok"], ["4 executed = approved .. ", "no · ship_to differs", "held"]]
   };
-  var timer = null;
+  var timer = null, auto = true, visible = false, current = "ok";
   function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
-  function line(l) { return '<span class="dim">  ' + esc(l[0]) + '</span><span class="' + l[2] + '">' + esc(l[1]) + "</span>"; }
-  function run(key) {
-    clearTimeout(timer);
+  function line(l, dots, res) {
+    return '<span class="dim">  ' + esc(l[0].slice(0, dots)) + "</span>" + (res ? '<span class="' + l[2] + '">' + esc(l[1]) + "</span>" : "");
+  }
+  function select(key) {
+    current = key;
     tabOk.setAttribute("aria-selected", key === "ok" ? "true" : "false");
     tabBad.setAttribute("aria-selected", key === "bad" ? "true" : "false");
-    var s = scripts[key], out = ['<span class="p">$</span> testigo verify ' + esc(s[0][0])];
-    if (reduce) { term.innerHTML = out.concat(s.slice(1).map(line)).join("\n"); return; }
-    var n = 1;
-    term.innerHTML = out[0] + ' <span class="caret"></span>';
-    (function next() {
-      if (n >= s.length) { term.innerHTML = out.join("\n"); return; }
-      out.push(line(s[n++]));
-      term.innerHTML = out.join("\n") + ' <span class="caret"></span>';
-      timer = setTimeout(next, 520);
+  }
+  function finalText(key) {
+    var s = scripts[key];
+    return ['<span class="p">$</span> testigo verify ' + esc(s[0][0])].concat(s.slice(1).map(function (l) { return line(l, l[0].length, true); })).join("\n");
+  }
+  function run(key) {
+    clearTimeout(timer);
+    select(key);
+    var s = scripts[key];
+    if (reduce) { term.innerHTML = finalText(key); return; }
+    var cmd = "testigo verify " + s[0][0], c = 0, done = [], n = 1, d = 0;
+    var caret = ' <span class="caret"></span>';
+    function head() { return '<span class="p">$</span> ' + esc(cmd.slice(0, c)); }
+    (function typeCmd() {                 // the command, letter by letter
+      term.innerHTML = head() + caret;
+      if (c++ < cmd.length) { timer = setTimeout(typeCmd, 45); return; }
+      timer = setTimeout(nextLine, 380);
     })();
+    function nextLine() {                 // each check: its leader fills, then its result
+      if (n >= s.length) {
+        term.innerHTML = [head()].concat(done).join("\n");
+        if (auto) timer = setTimeout(function () { run(current === "ok" ? "bad" : "ok"); }, 3200);
+        return;
+      }
+      var l = s[n];
+      d = Math.min(l[0].length, d + 3);
+      var shown = d < l[0].length ? line(l, d, false) : line(l, d, true);
+      term.innerHTML = [head()].concat(done, [shown]).join("\n") + caret;
+      if (d < l[0].length) { timer = setTimeout(nextLine, 22); return; }
+      done.push(shown); n++; d = 0;
+      timer = setTimeout(nextLine, 340);
+    }
   }
-  tabOk.addEventListener("click", function () { run("ok"); });
-  tabBad.addEventListener("click", function () { run("bad"); });
-  if ("IntersectionObserver" in window) {
-    var tio = new IntersectionObserver(function (en) { if (en[0].isIntersecting) { run("ok"); tio.disconnect(); } }, { threshold: 0.5 });
-    tio.observe(term);
-  }
+  tabOk.addEventListener("click", function () { auto = false; run("ok"); });
+  tabBad.addEventListener("click", function () { auto = false; run("bad"); });
+  if ("IntersectionObserver" in window && !reduce) {
+    new IntersectionObserver(function (en) {
+      var now = en[0].isIntersecting;
+      if (now && !visible) run(current);                       // start or resume when seen
+      if (!now && visible) { clearTimeout(timer); term.innerHTML = finalText(current); }
+      visible = now;
+    }, { threshold: 0.35 }).observe(term);
+  } else { run("ok"); }
 
   // copy command
   var copyBtn = document.getElementById("copyBtn"), cmd = document.getElementById("cmd");

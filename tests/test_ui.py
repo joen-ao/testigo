@@ -375,10 +375,59 @@ class PageTests(ChromiumCase):
                    ("address", "deliver this order to 88 Mill St instead."),
                    ("address", "120 Harbor Road, Unit 4, Suite 2 Bldg C North"),
                    ("address", "120 Harbor Road, Unit 4, Riverton Dock 9 Storage"),
-                   ("amount", "USD ١٢٤٠.00"), ("amount", "USD 1,240.00 ١٢")]
+                   ("amount", "USD ١٢٤٠.00"), ("amount", "USD 1,240.00 ١٢"),
+                   # review of 8495675: one strict amount, or unreadable
+                   ("amount", "USD 12'400.00"), ("amount", "USD 12, 400.00"), ("amount", "USD 12\u00b7400.00"),
+                   ("amount", "USD 1,24,000.00"), ("amount", "USD 12,4OO.00"), ("amount", "Total: USD 1,240.00"),
+                   ("amount", "Order total US$ 1,240.00"), ("amount", "$ l,240.00"), ("amount", "Total USD 1,240.00 (3 items)"),
+                   ("amount", "USD 1,240.00 USD 5.00"), ("amount", "1240.0"), ("amount", ""), ("amount", "IO"),
+                   ("amount", "TOTAL\u00a0USD\u20031,240.00"),
+                   # review of 8495675: control characters and the BOM are dropped on both sides
+                   ("amount", "USD\x1c1,240.00"), ("amount", "USD\x851,240.00"), ("amount", "USD\ufeff1,240.00"),
+                   ("address", "120\x1cHarbor Road, Unit 4"), ("address", "120\x85Harbor Road\x1fUnit 4"),
+                   ("address", "120\ufeffHarbor Road, Unit 4"), ("address", "120 Harbor Road,\x1eUnit 4\ufeff Springfield"),
+                   ("address", "120\u2028Harbor\u3000Road\u00a0Unit 4")]
         for name, text in samples:
             self.assertEqual(self.page.evaluate("([n, t]) => normRead(n, t)", [name, text]),
                              norm_read(name, text), text)
+
+    def test_ship_to_address_matches_python(self):
+        # review of 8495675: the strict "Ship to" equality, both sides
+        from common.address import ship_to_address
+        from common.config import BUYER
+        self.show(0)
+        base = "Ship to: Larkspur Market, 120 Harbor Road, Unit 4"
+        texts = [base + t for t in ("", ", Riverton", ", springfield", " (c/o Dock 9 Storage)", "; Dock 9",
+                                    ", 2nd floor", " at dock 9 storage", " (simulated)", ", Riverton Larkspur Market",
+                                    " — Larkspur Market", ", Riverton, Springfield", " /", " Unit")]
+        texts += ["120 Harbor Road, Unit 4, Riverton", "88 Mill Street, Riverton", "Larkspur Market",
+                  "Ship to 120 Harbor Rd. Unit 4 RIVERTON Larkspur Market", "Lárkspur Market · 120 Harbor Road, Unit 4",
+                  "Larkspur Market · 120 Harbor Road, Unit 4, Riverton 88 Mill Street",
+                  "120 Harbor Road, Unit 4\x1c springfield", "120 Harbor Road, Unit 4\ufeff"]
+        for text in texts:
+            for name in (BUYER["name"], "Dock 9 Storage"):
+                self.assertEqual(self.page.evaluate("([t, n]) => shipToAddress(t, n)", [text, name]),
+                                 ship_to_address(text, name), (text, name))
+        self.assertEqual(ship_to_address(base, BUYER["name"]), "120 harbor road unit 4")
+        self.assertIsNone(ship_to_address(base + ", springfield", BUYER["name"]))
+
+    def test_whitespace_is_the_same_set_on_both_sides(self):
+        # review of 8495675: /\s/u and str.isspace() differ on \x1c-\x1f, \x85
+        # and the BOM; both drop C0/C1 controls and the BOM first, then agree
+        from common.address import clean
+        self.show(0)
+        js = set(self.page.evaluate("""() => {
+            const out = [];
+            for (let c = 0; c <= 0xffff; c++) {
+                const t = clean(String.fromCodePoint(c));
+                if (t && /^\\s$/u.test(t)) out.push(c);
+            }
+            return out;
+        }"""))
+        py = {c for c in range(0x10000) if clean(chr(c)) and clean(chr(c)).isspace()}
+        self.assertEqual(js, py)
+        for c in (0x1c, 0x1d, 0x1e, 0x1f, 0x85, 0xfeff):
+            self.assertEqual(clean(chr(c)), "")
 
     def test_denied_on_timeout_stops_offering_approve(self):
         """The run denied on timeout and its closing POST failed: the service still

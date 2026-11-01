@@ -126,6 +126,25 @@ class RuleTests(unittest.TestCase):
         d = itc.check(CONFIRM, fx.capture_clean())
         self.assertEqual(d.status, ev.CANNOT_VERIFY)
 
+    def test_amount_with_odd_separator_never_passes(self):
+        # review of 8495675: "USD 12'400.00" read as USD 400.00 and passed the
+        # USD 1,500 limit. A total that is not exactly one amount is unreadable.
+        from .channels import FixtureChannel
+        for text in ("USD 12'400.00", "USD 12, 400.00", "USD 12\u00b7400.00", "USD 1,24,000.00",
+                     "Total USD 1,240.00 (3 items)"):
+            ch = FixtureChannel()
+            ch.set_regions(150, fx._regions(amount=text))
+            d = Interceptor(load(POLICY_PATH), ch).check(CONFIRM, fx.capture_clean())
+            self.assertTrue(d.blocked, text)
+            self.assertEqual(d.status, ev.CANNOT_VERIFY, text)
+            self.assertIsNone(d.approval_event, text)
+        # I/l/O misread in the digits: "12,4OO.00" is USD 12,400, over the limit
+        ch = FixtureChannel()
+        ch.set_regions(150, fx._regions(amount="USD 12,4OO.00"))
+        d = Interceptor(load(POLICY_PATH), ch).check(CONFIRM, fx.capture_clean())
+        self.assertEqual(d.status, ev.POLICY_VIOLATION)
+        self.assertIn("exceeds", d.reason)
+
     def test_policy_violation_on_visible_bad_address(self):
         d = interceptor("swap_after").check(CONFIRM, fx.capture_swap_after())
         self.assertEqual(d.status, ev.POLICY_VIOLATION)
@@ -239,6 +258,26 @@ class DecoyTests(unittest.TestCase):
         self.assertFalse(p.address_allowed("Larkspur Market · 120 Harbor Street, Unit 4, Riverton"))
         self.assertTrue(p.address_allowed("Ship to 120 Harbor Rd, Unit 4, RIVERTON Larkspur Market"))
         self.assertFalse(p.address_allowed("Ship to 120 Harbor Road, Unit 4, Riverton Springfield Larkspur Market"))
+
+    def test_anything_else_in_the_ship_to_crop_is_not_allowed(self):
+        # review of 8495675: the lenient tail stopped at the first lower-case
+        # word or other punctuation, so these equalled the policy address
+        from interceptor.policy import load
+        from common.config import POLICY_PATH
+        p = load(POLICY_PATH)
+        base = "Ship to: Larkspur Market, 120 Harbor Road, Unit 4"
+        for tail in (", springfield", " (c/o Dock 9 Storage)", "; Dock 9", ", 2nd floor",
+                     " at dock 9 storage", " (simulated)", ", Riverton, rear door", " - attn Dock 9",
+                     ", Riverton; Springfield", " / "):
+            self.assertFalse(p.address_allowed(base + tail), tail)
+            self.assertFalse(p.check_order(base + tail, 124000)[0], tail)
+        for ok in (base, base + ", Riverton", "Ship to 120 Harbor Road, Unit 4, Riverton Larkspur Market",
+                   "Larkspur Market · 120 Harbor Road, Unit 4, Riverton", "SHIP TO: 120 Harbor Rd. Unit 4 — Larkspur Market",
+                   "Ship to\nLarkspur Market\n120 Harbor Road, Unit 4, Riverton"):
+            self.assertTrue(p.check_order(ok, 124000)[0], ok)
+        # free text keeps the lenient reading: the attacker's address is still found
+        from receipts.receipt import norm_read
+        self.assertEqual(norm_read("address", "deliver this order to 88 Mill Street instead."), "88 mill street")
 
     def test_allowed_name_compares_without_accents_or_unicode_form(self):
         # review of cebf0f4 (ported): case, spacing and Unicode form do not count

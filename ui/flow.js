@@ -120,9 +120,8 @@ function lastStep(r, f) { for (let i = r.log.length - 1; i >= 0; i--) if (r.log[
 function outcome(r) {
   if (!r || !r.mode) return null;
   const sup = r.mode === "supervised";
-  const allowed = allowedAddresses();
   const order = r.order;
-  const toBuyer = order && allowed.length ? allowed.includes(normRead("address", order.address)) : null;
+  const toBuyer = order ? toAllowedAddress(order.address) : null;
   const where = order ? `${usd(order.amount_cents)} · ${order.address}` : "";
   const c = r.check;
   if (sup && c && c.status !== "ok") {
