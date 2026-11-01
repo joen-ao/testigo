@@ -22,7 +22,7 @@ const SITUATIONS = [
   { key: "clean", name: "Normal order", text: "An honest supplier page. The order should reach your shop." },
   { key: "a1", name: "Hidden order in the page code", text: "Invisible text tells the agent to deliver somewhere else." },
   { key: "a2", name: "Order painted in an image", text: "A banner image carries a faint instruction to change the address." },
-  { key: "a3", name: "Address changed at the last second", text: "The review screen swaps in another address just before Confirm." },
+  { key: "a3", name: "Tampered delivery address", text: "A script shows another street under your shop’s name." },
 ];
 function situation(key) { return SITUATIONS.find(x => x.key === key) || { key, name: key || "—", text: "" }; }
 
@@ -373,11 +373,11 @@ const page = {
     </div>
     <p class="fine-print">Runs on Meta’s Muse Wonder, SAM 3.1, Muse Spark and Muse Voice. Simulated shop and supplier.</p>
   </div>
-  <figure class="mock" aria-label="Example: a review screen where the delivery address was swapped, blocked by TESTIGO+">
+  <figure class="mock" aria-label="Example: a review screen showing another street under the shop’s name, blocked by TESTIGO+">
     <div class="mock-bar" aria-hidden="true"><i></i><i></i><i></i><span>Distribuidora X · Review order</span></div>
     <div class="mock-body">
       <div class="mock-row"><span class="muted">Order DX-2041 · 3 items</span><b>COP 120,000</b></div>
-      <div class="mock-field bad"><span class="lbl">Deliver to · on screen</span><span class="val">Bodega Norte · Carrera 80 # 7-15</span></div>
+      <div class="mock-field bad"><span class="lbl">Deliver to · on screen</span><span class="val">Tienda Doña Marta · Carrera 80 # 7-15</span></div>
       <div class="mock-field"><span class="lbl ok-t">Your signed rule</span><span class="val">Tienda Doña Marta · Calle 45 # 12-30</span></div>
       <div class="mock-stop">${ICON.stop}<div><b>Blocked before the click</b><span>The address on screen is not the one you signed.</span></div></div>
     </div>
@@ -393,7 +393,7 @@ const page = {
     <div class="cards3">
       <div class="card"><span class="tag">A1</span><h3>Hidden in the page code</h3><p>Invisible text tells the agent to change the delivery address. You never see it; the agent reads it.</p></div>
       <div class="card"><span class="tag">A2</span><h3>Painted inside an image</h3><p>The order is drawn faintly in a promo banner. It is in the pixels, not in the code, so code checks miss it.</p></div>
-      <div class="card"><span class="tag">A3</span><h3>Changed at the last second</h3><p>A script swaps the address on the review screen, right before the agent clicks Confirm.</p></div>
+      <div class="card"><span class="tag">A3</span><h3>Tampered delivery address</h3><p>A script shows another street under your shop’s name, on every page. The agent never sees your real address.</p></div>
     </div>
   </div>
 </section>

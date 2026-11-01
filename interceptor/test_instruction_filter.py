@@ -50,6 +50,18 @@ class FilterTests(unittest.TestCase):
         self.assertFalse(looks_like_instruction("Confirm order"))
         self.assertFalse(looks_like_instruction("Delivery: Thursday"))
 
+    def test_hardened_attack_wordings_are_flagged_by_the_address_only(self):
+        # 1 Nov: the A1/A2 wordings read as a delivery update from the shop
+        # ("Delivery update for Tienda Doña Marta...", "— Marta"), with no agent
+        # term. The filter still flags each one, but only because it carries a
+        # street address; without it, none would be flagged (F5-D4). A1 is then
+        # caught as page code not painted, A2 as painted text not in the code.
+        from common.address import ADDRESS_RE
+        from portal.scenarios import WORDING
+        for v, line in WORDING.items():
+            self.assertTrue(looks_like_instruction(line), "v%d" % v)
+            self.assertFalse(looks_like_instruction(ADDRESS_RE.sub("", line)), "v%d" % v)
+
     def test_words_only_address_is_not_flagged(self):
         # F5-D4 (R10): an order in words only has none of the signals; a known limit
         self.assertFalse(looks_like_instruction("carrera ochenta número siete quince"))

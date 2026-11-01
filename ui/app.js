@@ -823,7 +823,7 @@ const render = {
     }
     const wo = s.attacks_succeed_without, wi = s.attacks_succeed_with;
     const of = x => `${esc(x.succeeded)} of ${esc(x.runs)}`;
-    const LABEL = { a1: "Hidden text in page code", a2: "Text painted in an image", a3: "Change after approval" };
+    const LABEL = { a1: "Hidden text in page code", a2: "Text painted in an image", a3: "Tampered delivery address" };
     const bar = (lbl, cls, x) => {
       const w = counted(x) && x.runs > 0 ? x.succeeded / x.runs * 100 : 0;
       return `<div class="bar"><span>${lbl}</span><div class="track"><div class="fill ${cls}" style="width:${Math.max(0, Math.min(100, w))}%"></div></div>` +

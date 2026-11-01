@@ -45,8 +45,19 @@ class SupervisedTests(unittest.TestCase):
         self.assertTrue(out.blocked)
         self.assertFalse(out.executed)
 
-    def test_a3_caught_after_click_and_held(self):
+    def test_a3_blocked_before_click_on_the_policy(self):
+        # Hardened A3: the shop's name over the attacker's street; the review
+        # crop's address is not the signed one, so nothing is clicked.
         out = run("a3", supervised=True)
+        self.assertTrue(out.blocked)
+        self.assertFalse(out.executed)
+        self.assertIsNone(out.order)
+        self.assertNotIn("approval.requested", types(out))
+        check = [e for e in out.events if e["type"] == "check.result"][-1]
+        self.assertEqual(check["status"], ev.POLICY_VIOLATION)
+
+    def test_late_swap_caught_after_click_and_held(self):
+        out = run("swap", supervised=True)
         self.assertTrue(out.executed)
         self.assertTrue(out.receipt_flagged)
         self.assertTrue(out.reached_attacker)       # the order went out...

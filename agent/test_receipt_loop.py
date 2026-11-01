@@ -53,8 +53,8 @@ class LoopReceiptTests(unittest.TestCase):
         signed = [e for e in out.events if e["type"] == "receipt.signed"][-1]
         self.assertEqual(signed["path"], "2026-10-31/run1/receipt.json")
 
-    def test_a3_receipt_is_signed_and_flags_step_four(self):
-        out = run_fixture("a3", run_dir=self.dir, signing_key=self.seed)
+    def test_late_swap_receipt_is_signed_and_flags_step_four(self):
+        out = run_fixture("swap", run_dir=self.dir, signing_key=self.seed)
         self.assertTrue(out.receipt_flagged)
         res = verify_receipt(str(out.receipt_path), evidence_dir=str(self.dir), policy_path=POLICY)
         self.assertTrue(res.checks[1].ok)

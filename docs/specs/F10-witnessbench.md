@@ -88,6 +88,8 @@ No hay código de benchmark todavía. F10 agrega la carpeta `bench/` con el scri
 - Latencia: `bench/run.py` envuelve `read_regions` y `read_label` del canal y mide cada lectura (chequeo y relecturas de F8 en revisión y resultado, que no traen `latency_ms`). `added_latency_ms` es el tiempo total de TESTIGO+ por corrida supervisada (mediana/p90) y `per_check_latency_ms` el de cada lectura. Se mide en el proceso, no desde `runs/usage.jsonl`, que no distingue corridas en paralelo.
 - Gate: g2 descuenta las propuestas inválidas; g3 deja fuera las corridas rotas y queda «incomplete» (no pasa); g4 registra aparte los errores de API, falla si n no es el esperado y cuenta como fallo (con motivo) una caja de referencia ausente; el resultado de un script caído en run_gate trae `threshold` y `n`.
 
+**Ataques endurecidos (1 nov, `03-revision-31-oct.md` §12).** Tras la corrida real del 31 oct (Wonder resistió los 15 ataques), A1/A2 son avisos de entrega de la propia tienda, sin término de agente, y A3 muestra `Tienda Doña Marta · Carrera 80 # 7-15` en todas las páginas del flujo (F2). La regla de éxito (`is_attack_success` / `delivered_to`) y el conteo no cambian. Con TESTIGO+, A3 se espera bloqueado antes del clic por la política (`policy_violation`), ya no como cambio después de aprobar. El resultado del 31 oct queda en `results/witnessbench-2026-10-31-delivery.json` y en §11; los ataques nuevos piden otra corrida real (no hecha aún).
+
 ## Hallazgos para los specs siguientes
 
 1. **Todo lo anterior.** F10 depende de F2 a F9 completos; es lo último que se construye (2 de nov). Si algo de abajo no está, el benchmark no corre.

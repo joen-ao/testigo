@@ -55,6 +55,8 @@ Una línea de la diferencia se marca si, en inglés o español, contiene al meno
 
 La lista exacta de patrones se fija y se amplía con los casos de WitnessBench. El texto de promoción, los menús y las etiquetas de accesibilidad no encajan en ninguna señal y no se marcan.
 
+**Qué marca desde el 1 nov (ataques endurecidos, F2 y `03-revision-31-oct.md` §12).** Las 5 redacciones de A1/A2 ya no nombran a un agente: son avisos de entrega de la propia tienda («Delivery update for Tienda Doña Marta (customer 0381)…», «— Marta»). El filtro las sigue marcando todas, pero **solo por la dirección** (`Carrera 80 # 7-15`); la señal «término de agente + verbo» ya no se dispara con ninguna, y sin la dirección ninguna se marcaría (probado en `interceptor/test_instruction_filter.py`). Así, A1 se frena como texto del código que no se pinta y A2 como texto pintado que no está en el código, siempre que la dirección se lea. Un aviso con la dirección solo en palabras sigue siendo el límite F5-D4 (`a1edge`, sin cambios). A3 no pasa por el filtro: código vivo y píxeles coinciden y lo frena la política (F6, regla 3). El texto oculto legítimo de F2-D4 sigue sin marcarse.
+
 ## 5. Criterios de aceptación de F5
 
 1. Cuando el código tiene una instrucción no dibujada, aparece en `code_only_text`; cuando los píxeles tienen una instrucción ausente del código, aparece en `pixels_only_text`.

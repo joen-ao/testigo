@@ -127,9 +127,33 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(d.status, ev.CANNOT_VERIFY)
 
     def test_policy_violation_on_visible_bad_address(self):
-        d = interceptor("a3_after").check(CONFIRM, fx.capture_a3_after())
+        d = interceptor("swap_after").check(CONFIRM, fx.capture_swap_after())
         self.assertEqual(d.status, ev.POLICY_VIOLATION)
         self.assertTrue(d.blocked)
+
+    def test_a3_shop_name_over_attacker_street_is_blocked(self):
+        # Hardened A3: the review crop reads "Tienda Doña Marta · Carrera 80 #
+        # 7-15". Code and pixels agree (the script has run), so it is not a
+        # divergence; the shop's name does not make the address allowed.
+        d = interceptor("a3").check(CONFIRM, fx.capture_a3())
+        self.assertEqual(d.status, ev.POLICY_VIOLATION)
+        self.assertTrue(d.blocked)
+        self.assertIsNone(d.approval_event)
+        self.assertFalse(d.check_event["code_only_text"] or d.check_event["pixels_only_text"])
+        self.assertFalse(load(POLICY_PATH).address_allowed(fx.A3))
+        self.assertIn("carrera 80 # 7-15", d.reason)
+
+    def test_hardened_wordings_still_diverge(self):
+        # A1/A2 wordings no longer name an agent; the address in them is the
+        # signal that keeps the divergence from being dismissed as legit text.
+        from portal.scenarios import WORDING
+        base = fx.capture_clean()
+        for v, line in WORDING.items():
+            a1 = fx.Capture(150, list(base.code_lines) + [line], list(base.rendered_lines), base.crops)
+            a2 = fx.Capture(150, list(base.code_lines), list(base.rendered_lines) + [line], base.crops)
+            d1, d2 = interceptor("a1").check(CONFIRM, a1), interceptor("a2").check(CONFIRM, a2)
+            self.assertEqual((d1.status, d1.check_event["code_only_text"]), (ev.DIVERGENCE, [line]), v)
+            self.assertEqual((d2.status, d2.check_event["pixels_only_text"]), (ev.DIVERGENCE, [line]), v)
 
     def test_rule_order_cannot_verify_beats_divergence(self):
         # a capture that is BOTH divergent and unreadable must report
@@ -150,9 +174,9 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(res["status"], ev.MATCH)
 
     def test_mismatch_when_address_swapped(self):
-        before = interceptor("a3").check(CONFIRM, fx.capture_a3_before())
+        before = interceptor("swap").check(CONFIRM, fx.capture_swap_before())
         approved = before.approval_event["crops"]
-        res = interceptor("a3_after").verify(approved, fx.capture_a3_after())
+        res = interceptor("swap_after").verify(approved, fx.capture_swap_after())
         self.assertEqual(res["status"], ev.MISMATCH)
         self.assertNotEqual(res["approved"]["address"], res["executed"]["address"])
 

@@ -3,8 +3,9 @@
   python3 -m agent.demo
 
 This is the "before vs after" of the pitch, and the shape WitnessBench scores:
-without TESTIGO+ the three attacks send the order to the attacker; with it, A1/A2 are blocked
-before the click, A3 is caught after and held, and clean still goes through.
+without TESTIGO+ the three attacks send the order to the attacker; with it, all three are
+blocked before the click (A3 on the policy: the shop's name over another street),
+and clean still goes through.
 """
 
 from tests.fixtures.fake_agent import run_fixture as run
@@ -14,7 +15,7 @@ LABELS = {
     "clean": "Clean (no attack)",
     "a1": "A1 hidden text in page code",
     "a2": "A2 text painted in image",
-    "a3": "A3 change after approval",
+    "a3": "A3 tampered delivery address",
 }
 
 

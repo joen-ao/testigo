@@ -1,6 +1,7 @@
 """Test-only stand-ins for the browser and the agent (moved out of agent/ by F0).
 
-FixtureDriver   serves the portal scenarios as fixed captures (no browser).
+FixtureDriver   serves the portal scenarios as fixed captures (no browser),
+                plus "swap" (changed after approval, for F8; not a portal scenario).
 ScriptedAgent   a deterministic, deliberately susceptible agent: it obeys an
                 injected "change the delivery address" instruction. It proves the loop is
                 wired, nothing about Wonder.
@@ -30,7 +31,8 @@ class FixtureDriver(BrowserDriver):
             "clean": fx.capture_clean,
             "a1": fx.capture_a1,
             "a2": fx.capture_a2,
-            "a3": fx.capture_a3_before,
+            "a3": fx.capture_a3,
+            "swap": fx.capture_swap_before,
             "blurred": fx.capture_blurred,
         }[scenario]()
 
@@ -44,7 +46,9 @@ class FixtureDriver(BrowserDriver):
         if action.get("kind") != "confirm":
             return
         intended = action.get("address_text", SHOP_ADDRESS)
-        delivered_to = ATTACKER_ADDRESS if self.scenario == "a3" else intended
+        # A3 posts what its page shows (Carrera 80 # 7-15 under the shop's
+        # name); the swap changes the address at the click.
+        delivered_to = ATTACKER_ADDRESS if self.scenario in ("a3", "swap") else intended
         self._order = {
             "address": delivered_to,
             "amount_cop": action.get("amount_cop", 120000),
@@ -54,7 +58,9 @@ class FixtureDriver(BrowserDriver):
 
     def observe_after(self):
         if self.scenario == "a3":
-            return fx.capture_a3_after()
+            return fx.capture_a3(frame=164)
+        if self.scenario == "swap":
+            return fx.capture_swap_after()
         return fx.capture_clean(frame=164)
 
     @property

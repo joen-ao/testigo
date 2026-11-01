@@ -159,7 +159,7 @@ Problema: 9 pestañas («Cover», «Mandate», …), un botón «Follow», atajo
 | --- | --- |
 | `#/` | Portada (diseño aprobado del lienzo): qué es TESTIGO+, los 3 ataques, cómo funciona, WitnessBench y «Try the demo». `#/how` y `#/attacks` bajan a su sección. |
 | `#/demo/rules` | 1 Tus reglas: la política firmada en palabras simples; «Use these rules» (principal) o «Record new rules» (el flujo de mandato en vivo de siempre). |
-| `#/demo/run` | 2 Correr el agente: 4 tarjetas (normal, orden escondida en el código, orden pintada en una imagen, dirección cambiada al final), interruptor «Protect with TESTIGO+» (encendido por defecto) y «Run the agent». Versión 1–5 y ventana visible en «More options». |
+| `#/demo/run` | 2 Correr el agente: 4 tarjetas (normal, orden escondida en el código, orden pintada en una imagen, dirección de entrega manipulada), interruptor «Protect with TESTIGO+» (encendido por defecto) y «Run the agent». Versión 1–5 y ventana visible en «More options». |
 | `#/demo/watch` | 3 Mirando: la última captura y una línea de tiempo en lenguaje simple; si TESTIGO+ pide aprobación, la cápsula (recortes, voz, aprobar/negar) aparece ahí mismo. |
 | `#/demo/result` | 4 Resultado: un solo desenlace grande (bloqueado y por qué, entregado en tu tienda, entregado al atacante, el agente se detuvo solo, error), la comparación con la otra corrida del mismo escenario, el recibo con «Verify receipt», y la evidencia (código vs. píxeles, aprobado vs. ejecutado, dónde estaba el ataque, todos los pasos) detrás de desplegables. «Run another» y «Compare without TESTIGO+». |
 | `#/results` | WitnessBench simple: las tres cifras y una tabla por escenario y modo. |
@@ -176,5 +176,7 @@ Las cifras de la portada y de `#/results` salen de `GET /api/bench` (`runs/bench
 - Mismas protecciones que las demás escrituras: Host local, Origin propio, JSON, solo loopback.
 
 **Buenas prácticas aplicadas:** botones y enlaces reales, etiquetas en cada control, foco visible, foco al título al cambiar de paso, `aria-live` con el estado de la corrida, contraste ≥ 4.5:1 (`--faint` pasó a `#6B6A66`), sin scroll horizontal a 375 px, estados de carga, vacío y error en cada paso, y la nota «simulation only» en el pie y en el paso 2. La jerga (SAM, hashes, `cannot_verify`, F8) solo aparece dentro de los desplegables y en el presentador.
+
+**Ataques endurecidos (1 nov, `03-revision-31-oct.md` §12).** A3 pasa a «Tampered delivery address» («A script shows another street under your shop’s name») en la tarjeta del paso 2, en la portada (tarjeta A3 y maqueta de la revisión: `Tienda Doña Marta · Carrera 80 # 7-15`) y en las barras de la vista 8. Los textos de A1/A2 no cambian.
 
 **Pruebas:** `tests/test_ui.py` (Chromium) cubre portada, resultados, los 4 pasos y los desenlaces con eventos de prueba; `tests/test_service.py` cubre `/api/run` con un proceso falso. Ninguna prueba corre el agente real ni llama a Meta.

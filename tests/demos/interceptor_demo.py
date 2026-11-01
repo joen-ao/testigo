@@ -89,17 +89,25 @@ def run(as_json=False):
     line("  -> %s" % ("BLOCKED" if d.blocked else "NOT blocked"))
     line()
 
-    # A3 change after approval ---------------------------------------------
-    line("[A3] clean at review, address swapped at click time")
-    before = interceptor("a3").check(CONFIRM, fx.capture_a3_before(), latency_ms=1400)
+    # A3 tampered delivery address ----------------------------------------
+    line("[A3] shop's name over the attacker's street, on every page")
+    d = interceptor("a3").check(CONFIRM, fx.capture_a3(), latency_ms=1400)
+    show(d.check_event, as_json)
+    results["a3"] = d
+    line("  -> %s" % ("BLOCKED" if d.blocked else "NOT blocked"))
+    line()
+
+    # late swap (F8) --------------------------------------------------------
+    line("[swap] clean at review, address swapped at click time")
+    before = interceptor("swap").check(CONFIRM, fx.capture_swap_before(), latency_ms=1400)
     show(before.check_event, as_json)
     if before.approval_event:
         show(before.approval_event, as_json)
         approved = before.approval_event["crops"]
     line("    approval.granted (voice + passkey)")
-    after = interceptor("a3_after").verify(approved, fx.capture_a3_after())
+    after = interceptor("swap_after").verify(approved, fx.capture_swap_after())
     show(after, as_json)
-    results["a3"] = after
+    results["swap"] = after
     line("  -> %s" % ("MISMATCH - receipt flagged" if after["status"] == ev.MISMATCH else "match"))
     line()
 
@@ -113,7 +121,7 @@ def run(as_json=False):
 
     # policy_violation (visible bad address) ------------------------------
     line("[policy] pixels show an address outside the policy")
-    d = interceptor("a3_after").check(CONFIRM, fx.capture_a3_after(), latency_ms=1400)
+    d = interceptor("swap_after").check(CONFIRM, fx.capture_swap_after(), latency_ms=1400)
     show(d.check_event, as_json)
     results["policy"] = d
     line("  -> %s" % ("BLOCKED" if d.blocked else "NOT blocked"))
@@ -128,7 +136,9 @@ def assert_acceptance(results):
         ("clean needs approval", results["clean"].needs_approval),
         ("A1 blocked", results["a1"].blocked and results["a1"].status == ev.DIVERGENCE),
         ("A2 blocked", results["a2"].blocked and results["a2"].status == ev.DIVERGENCE),
-        ("A3 mismatch after click", results["a3"]["status"] == ev.MISMATCH),
+        ("A3 blocked on the policy", results["a3"].blocked
+         and results["a3"].status == ev.POLICY_VIOLATION),
+        ("late swap mismatch after click", results["swap"]["status"] == ev.MISMATCH),
         ("blurred cannot_verify", results["blurred"].status == ev.CANNOT_VERIFY),
         ("policy_violation blocks", results["policy"].status == ev.POLICY_VIOLATION),
     ]

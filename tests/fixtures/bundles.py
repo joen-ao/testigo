@@ -14,7 +14,7 @@ The crop files hold the exact bytes the interceptor hashed, so `testigo verify`
 recomputes the same sha256. (Here the crops are placeholder bytes; in the live
 system they are the real cropped PNGs — the hashing path is identical.)
 
-  .venv/bin/python -m tests.fixtures.bundles --scenario a3 --out runs/evidence/test-a3
+  .venv/bin/python -m tests.fixtures.bundles --scenario swap --out runs/evidence/test-swap
 """
 
 import argparse
@@ -28,6 +28,10 @@ from receipts.receipt import build as build_receipt, dumps
 from tests.fixtures import captures as fx
 
 CROP_NAMES = ("amount", "address")
+# examples/a3 keeps its name from before 1 Nov, when A3 swapped the address at
+# the click; that receipt is the late-swap fixture. Since 1 Nov A3 is blocked
+# before the click and leaves no receipt (F2, 03 §12).
+ALIASES = {"a3": "swap"}
 
 
 def _crops_from(capture):
@@ -37,20 +41,22 @@ def _crops_from(capture):
 def build_bundle(scenario, out_dir, seed=None, policy_path=POLICY_PATH, key_path=None):
     """Run the supervised check/verify for `scenario` and write a signed bundle.
 
-    Works for clean (match) and a3 (mismatch). Scenarios blocked before the
-    click (a1/a2/blurred) produce no receipt — there was no approved order.
+    Works for clean (match) and swap (mismatch; "a3" names the same, see
+    ALIASES). Scenarios blocked before the click (a1/a2/a3/blurred) produce no
+    receipt — there was no approved order.
     """
+    fixture = ALIASES.get(scenario, scenario)
     policy = load_policy(policy_path)
     if seed is None:
         seed = keys.load_or_create_seed(key_path) if key_path else keys.generate_seed()
 
-    pre = {"clean": fx.capture_clean, "a3": fx.capture_a3_before}[scenario]()
-    itc = Interceptor(policy, fx.channel_for(scenario))
+    pre = {"clean": fx.capture_clean, "swap": fx.capture_swap_before}[fixture]()
+    itc = Interceptor(policy, fx.channel_for(fixture))
     decision = itc.check({"kind": "confirm"}, pre, latency_ms=1400)
     if decision.blocked or not decision.needs_approval:
         raise ValueError("scenario %r produced no approved order" % scenario)
 
-    after = fx.capture_a3_after() if scenario == "a3" else fx.capture_clean(frame=164)
+    after = fx.capture_swap_after() if fixture == "swap" else fx.capture_clean(frame=164)
     approved_crops = _crops_from(pre)
     executed_crops = _crops_from(after)
 
@@ -78,7 +84,7 @@ def build_bundle(scenario, out_dir, seed=None, policy_path=POLICY_PATH, key_path
 
 def main():
     ap = argparse.ArgumentParser(description="Build a signed receipt bundle")
-    ap.add_argument("--scenario", default="clean", choices=["clean", "a3"])
+    ap.add_argument("--scenario", default="clean", choices=["clean", "swap", "a3"])
     ap.add_argument("--out", default="runs/evidence/test-bundle")
     ap.add_argument("--key", default=None, help="default: a throwaway key")
     args = ap.parse_args()
