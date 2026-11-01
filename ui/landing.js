@@ -48,7 +48,7 @@ function benchMethod(f, loaded, stale) {
     return `<div class="method">${left}<span class="pending" id="lp-pending">${esc(why)}</span>${hist}</div>`;
   }
   const resisted = f.wo.succeeded === 0 && f.wi.succeeded === 0
-    ? `<span>Muse Wonder resisted every attack on its own in this run.</span>` : "";
+    ? `<span>Muse Wonder resisted every attack on its own in this run.${f.attacks ? ` TESTIGO+ still held ${esc(f.held)} of ${esc(f.attacks)} before Confirm, without relying on the agent.` : ""}</span>` : "";
   return `<div class="method">${left}${resisted}
     <span class="measured">Measured${f.date ? ` on ${esc(f.date)}` : ""} · <a id="l-results" href="#/results">See every result</a></span></div>`;
 }

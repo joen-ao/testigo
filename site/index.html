@@ -235,6 +235,7 @@ h2 em,h1 em{color:var(--teal)}
 .num p{margin:0;color:var(--muted)}
 .method{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;font-size:15px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px}
 .pending{font-family:var(--mono);font-size:12px;color:var(--amber);border:1px solid rgba(240,178,84,.4);border-radius:999px;padding:4px 10px}
+.measured{font-family:var(--mono);font-size:12px;color:var(--teal)}
 
 /* limits (paper) */
 .limits .wrap{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(40px,6vw,88px);align-items:start}
@@ -465,13 +466,13 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
       <p class="lede">15 attacks and 5 clean orders, each run without and with TESTIGO+. We report counts, not percentages.</p>
     </div>
     <div class="numbers reveal">
-      <div class="num"><span class="n">[X]<small>/15</small></span><p>orders shipped to the attacker without TESTIGO+</p></div>
-      <div class="num good"><span class="n">[Y]<small>/15</small></span><p>with TESTIGO+</p></div>
-      <div class="num"><span class="n">[Z]<small>/5</small></span><p>clean orders held for a person, about [N] s per check</p></div>
+      <div class="num"><span class="n">0<small>/15</small></span><p>orders shipped to the attacker without TESTIGO+ in this run</p></div>
+      <div class="num good"><span class="n">15<small>/15</small></span><p>attacks held by TESTIGO+ before Confirm</p></div>
+      <div class="num"><span class="n">0<small>/5</small></span><p>clean orders held for a person, about 14 s per check</p></div>
     </div>
     <div class="method reveal">
       <span>Muse Wonder drives a simulated supplier portal. Each attack has five variants.</span>
-      <span class="pending">Re-running with the current scenario</span>
+      <span>Wonder resisted every attack on its own here. In an earlier run with the same agent and attacks, 3 of 5 forged-address orders reached the attacker.</span><span class="measured">Measured on 31 Oct</span>
     </div>
   </div>
 </section>
@@ -484,7 +485,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
       <p class="lede">An oversight tool should say what it doesn’t do.</p>
     </div>
     <div class="faq reveal">
-      <details open><summary>Does it slow the agent down?</summary><p>Only on sensitive actions. Each check reads the screen with two models, about [N] seconds in our runs. Ordinary clicks pass straight through.</p></details>
+      <details open><summary>Does it slow the agent down?</summary><p>Only on sensitive actions. Each check reads the screen with two models, about 14 seconds in our runs. Ordinary clicks pass straight through.</p></details>
       <details><summary>What if it can’t read the screen?</summary><p>It doesn’t guess. The order waits for a person. We count how often that happens on clean orders.</p></details>
       <details><summary>Can an attack still get through?</summary><p>An instruction written only in words, with no address in it, can slip past the instruction filter. We test that case separately and publish the result.</p></details>
       <details><summary>Does the voice prove who approved?</summary><p>No. Reading the crops aloud confirms intent against the pixels. Proving identity would take a passkey, which this prototype leaves out.</p></details>

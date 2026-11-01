@@ -167,9 +167,9 @@ class ServiceUITests(unittest.TestCase):
         self.assertTrue(got["available"])
         self.assertTrue(got["source"].startswith("results/witnessbench-"))
         self.assertIn("summary", got["data"])
-        # the 31 Oct results are from the earlier scenario: history, never current
-        self.assertIs(got["current"], False)
-        self.assertIsNone(got["scenario"])
+        # the newest committed results are this scenario's
+        self.assertEqual(got["source"], "results/witnessbench-2026-10-31-global.json")
+        self.assertIs(got["current"], True)
         (self.tmp / "bench_results.json").write_text('{"summary": {}}')
         got = self.c.get("/api/bench").json()
         self.assertEqual((got["source"], got["data"]), ("runs/bench_results.json", {"summary": {}}))
@@ -706,16 +706,14 @@ class FlowPageTests(ChromiumCase):
         self.events(*run_fixture(scenario, supervised=supervised).events)
 
     # -- landing and results ------------------------------------------------
-    def current_copy_of_the_committed_results(self):
-        """The 31 Oct results, relabelled as this scenario's (test data only)."""
-        import json
-        from interceptor.service import _committed_bench
-        data = json.loads(_committed_bench()[0].read_text(encoding="utf-8"))
-        data["scenario"] = CURRENT
-        (self.tmp / "bench_results.json").write_text(json.dumps(data))
+    def earlier_scenario_results(self):
+        """The 31 Oct delivery-domain results: an earlier scenario, history only."""
+        import shutil
+        from interceptor.service import RESULTS_DIR
+        shutil.copy(Path(RESULTS_DIR) / "witnessbench-2026-10-31-delivery.json", self.tmp / "bench_results.json")
 
     def test_landing_shows_old_results_as_not_measured(self):
-        # the committed 31 Oct results are from the earlier scenario: history only
+        self.earlier_scenario_results()
         self.open("#/", "#lp-pending")
         t = self.main()
         for want in ("Your agent can be fooled.", "The screen can’t.", "Agents read things", "Trust the screen",
@@ -732,11 +730,12 @@ class FlowPageTests(ChromiumCase):
         self.assertEqual(self.page.get_attribute("#start-demo", "href"), "#/demo/rules")
 
     def test_landing_reads_the_results_of_this_scenario(self):
-        self.current_copy_of_the_committed_results()
+        # no local run: the newest committed results (global scenario, 31 Oct)
         self.open("#/", ".figs:not(.pending-figs)")
         t = self.main()
-        for want in ("0/15", "orders shipped to the attacker without TESTIGO+", "1/5",
-                     "held for a person", "about 15 s per check", "Muse Wonder resisted every attack",
+        for want in ("0/15", "orders shipped to the attacker without TESTIGO+", "0/5",
+                     "held for a person", "about 14 s per check", "Muse Wonder resisted every attack",
+                     "TESTIGO+ still held 15 of 15 before Confirm",
                      "Measured on 31 Oct"):
             self.assertIn(want, t)
         self.assertNotIn("%", t)
@@ -782,13 +781,14 @@ class FlowPageTests(ChromiumCase):
         self.no_sideways_scroll()
 
     def test_results_page_table(self):
+        self.earlier_scenario_results()
         self.open("#/results", ".bench-note")
         self.assertIn("Not measured yet in this scenario", self.main())
         self.assertIn("Re-running with the current scenario", self.main())
-        self.current_copy_of_the_committed_results()
+        (self.tmp / "bench_results.json").unlink()
         self.open("#/results", ".rtable")
         t = self.main()
-        for want in ("WitnessBench results", "9 of 10", "0/15", "1/5", "Hidden order in the page code",
+        for want in ("WitnessBench results", "10 of 10", "0/15", "0/5", "15 of 15", "Hidden order in the page code",
                      "Reached the attacker", "Stopped by TESTIGO+", "Agent stopped on its own"):
             self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
         a1_with = self.page.locator(".rtable tbody tr").nth(3).inner_text()
@@ -1041,9 +1041,9 @@ class FlowPageTests(ChromiumCase):
         (self.tmp / "bench_results.json").write_text(json.dumps(
             {"summary": summary, "rows": [], "complete": False, "missing": ["a2 v1", "a3 v2"],
              "scenario": CURRENT}))
-        self.open("#/", "#lp-pending")
-        # the committed results are the complete ones, but from the earlier scenario
-        self.assertIn("Re-running with the current scenario", self.main())
+        self.open("#/", ".figs:not(.pending-figs)")
+        # the landing keeps the committed complete results
+        self.assertIn("0/15", self.main())
         self.assertNotIn("2/3", self.main())
         self.open("#/results", ".figs:not(.pending-figs)")
         t = self.main()

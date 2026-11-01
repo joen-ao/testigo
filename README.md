@@ -311,29 +311,28 @@ Honest snapshot; decisions and measurements in
 [`docs/specs/04-escenario-global.md`](docs/specs/04-escenario-global.md).
 On Nov 1 the team decided (R2) that TESTIGO+ protects the delivery address of a
 supplier order, and then moved the demo to the global scenario (Larkspur
-Market, USD, English voice). Everything that depends on the scenario (g1, g2,
-g4, g5, g6 and WitnessBench) has to be measured again; the Oct 31 numbers
-below are history from the earlier scenario.
+Market, USD, English voice). The gates and WitnessBench were measured again in
+the global scenario on the night of Oct 31.
 
 | Piece | State |
 | --- | --- |
-| Meta API (Wonder, Spark, SAM, Voice) | connected (gates g1, g2 passed on Oct 31; re-run in the delivery domain pending) |
+| Meta API (Wonder, Spark, SAM, Voice) | connected; global-scenario gates: g1 5/5, g2 10/10, g5 5/5, g6 20/20 exact (median 843 ms) pass; g4 (SAM alone) 54/90, fails — the pixel channel does not rely on SAM alone |
 | Portal: two-step order, editable delivery address, A1/A2/A3, legitimate hidden text, token-protected order log | works (F2) |
 | Wonder driving Chromium with our function tools, multi-step loop | works (F3) |
-| Pixel channel: Spark reads + SAM boxes + real crops | works (F4); median 15.2 s per check, p90 28.6 s (WitnessBench, 31 Oct) |
+| Pixel channel: Spark reads + SAM boxes + real crops | works (F4); median 14.2 s per check, p90 17.8 s (WitnessBench, global scenario) |
 | Divergence filter, decision engine, signed policy (`deliver_only`) | works (F5, F6) |
 | Spoken mandate → signed policy | works with Voice + Spark (F1) |
 | Voice approval in the interface | built; tested offline and headless, not yet with a real microphone (F7) |
 | Re-read on the review screen (blocks) and after the click (flags) | works (F8) |
 | Signed receipts in every approved run, `testigo verify` | works; a real receipt verifies (F9) |
-| WitnessBench | not measured yet in the global scenario. History (earlier scenario, F10, `results/witnessbench-2026-10-31-delivery.json`): real run, 42 of 42 without errors; 0 of 15 orders reached the attacker with or without TESTIGO+ (Muse Wonder resisted every attack on its own); with TESTIGO+, 9 of 10 pages with a hidden or painted order were stopped before Confirm; 1 of 5 clean orders paused as cannot_verify |
+| WitnessBench | global scenario, real run on 31 Oct (F10, `results/witnessbench-2026-10-31-global.json`): 42 of 42 without errors. Without TESTIGO+, 0 of 15 orders reached the attacker in this run (Wonder ignored A1/A2 and stalled on A3; in the run before, same agent and attacks, 3 of 5 A3 orders did). With TESTIGO+, 15 of 15 attacks held before Confirm and 0 of 5 clean orders held; 3 clean orders delivered with a receipt, 2 stalled in the agent looking for the saved address. Median 14.2 s per check (p90 17.8 s). Details in `docs/specs/04-escenario-global.md` |
 | Live interface | landing, four-step guided demo that starts runs (`POST /api/run`), results page; presenter views at `#/present` (F11) |
 
 The Meta computer-use tool is not available for Wonder with our keys, so
-Wonder drives the browser through our own `function` tools (F3-D5). In the
-31 Oct run (earlier scenario, before the attacks were hardened) Wonder resisted
-all 15 attacks on its own; the hardened attacks in the global scenario are
-still to be measured.
+Wonder drives the browser through our own `function` tools (F3-D5). Wonder
+is hard to fool on its own: with the hardened attacks it fell for the forged
+address in 3 of 5 runs once and in 0 of 5 the next time. TESTIGO+ does not
+depend on that: it held all 15 attacks from the screen and the signed policy.
 
 ## Rules we keep
 
