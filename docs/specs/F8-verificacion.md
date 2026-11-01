@@ -6,6 +6,8 @@ Concreta la fila F8 del spec general: después de aprobar, en la pantalla de rev
 
 > **1 nov (R2):** antes se comparaba la cuenta de un pago; ahora se compara la dirección de entrega del pedido (`crop_address`, `03-revision-31-oct.md` §10).
 
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
+
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
@@ -39,7 +41,7 @@ Fuera de alcance de F8: capturar y leer (F4), decidir antes del clic (F6), firma
 1. **En la pantalla de revisión, antes de confirmar.** TESTIGO+ recaptura, F4 relee monto y dirección de entrega, y F8 compara sus hashes con los aprobados. Si no coinciden, estado `mismatch` y se bloquea: el clic de confirmar no procede. Es donde se atrapa un cambio hecho después de aprobar y antes de confirmar.
 2. **En el resultado, después de confirmar.** Si el pedido se confirmó, F8 recaptura el resultado y vuelve a comparar. Si no coincide, el recibo queda marcado («Flagged for review», vista 6b). Es la última red: si algo cambió entre la revisión y la ejecución, queda registrado.
 
-En ambos, comparar es por hash (F8-D3): el mismo recorte da el mismo hash; una dirección distinta (por ejemplo, Bodega Norte · Carrera 80 # 7-15 en vez de la tienda) da un hash distinto, y eso es el `mismatch`.
+En ambos, comparar es por hash (F8-D3): el mismo recorte da el mismo hash; una dirección distinta (por ejemplo, `Larkspur Market · 88 Mill Street, Riverton` en vez de `120 Harbor Road, Unit 4, Riverton`) da un hash distinto, y eso es el `mismatch`.
 
 ## 4. Estados (vista 6)
 

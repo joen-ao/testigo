@@ -8,6 +8,8 @@ Concreta la fila F11 del spec general: las vistas del lienzo de diseño, conecta
 >
 > **1 nov (R2):** las vistas antes contaban un pago; ahora cuentan un pedido y su dirección de entrega (`03-revision-31-oct.md` §10). Los textos de las vistas siguen a `02-spec-vistas-maquetas.md`.
 
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
+
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
@@ -113,7 +115,7 @@ En `interceptor/events.py` (todos opcionales o nuevos, compatibles hacia atrás)
 | Evento o campo | Para qué | Lo llena |
 | --- | --- | --- |
 | `run.started` (`mode`, `scenario`, `variant`) | Separar la corrida sin supervisor de la supervisada | El loop, ya |
-| `order.confirmed` (`address`, `amount_cop`) | Vista 3: el pedido que se confirmó sin supervisor; vista 6: el registro del portal | El loop, ya (desde `driver.last_order`) |
+| `order.confirmed` (`address`, `amount_cents`) | Vista 3: el pedido que se confirmó sin supervisor; vista 6: el registro del portal | El loop, ya (desde `driver.last_order`) |
 | `explain.result` (`frame`, `status`, `regions`, `code_only_text`, `pixels_only_text`, `after_run`, `image`) | Vista 3: dónde estaba el texto del ataque, calculado después de la corrida | `agent.run --no-supervisor --explain`, nunca WitnessBench |
 | `frame.captured.image` | La captura detrás de las cajas de SAM (vistas 2–4) | F3: el driver guarda la captura en `runs/` y pone `Capture.image` |
 | `approval.requested.images`, `verify.result.images` | Los recortes PNG de las vistas 5 y 6 | F4/F8: guardar los recortes en `runs/` |
@@ -161,7 +163,7 @@ Problema: 9 pestañas («Cover», «Mandate», …), un botón «Follow», atajo
 | `#/demo/rules` | 1 Tus reglas: la política firmada en palabras simples; «Use these rules» (principal) o «Record new rules» (el flujo de mandato en vivo de siempre). |
 | `#/demo/run` | 2 Correr el agente: 4 tarjetas (normal, orden escondida en el código, orden pintada en una imagen, dirección de entrega manipulada), interruptor «Protect with TESTIGO+» (encendido por defecto) y «Run the agent». Versión 1–5 y ventana visible en «More options». |
 | `#/demo/watch` | 3 Mirando: la última captura y una línea de tiempo en lenguaje simple; si TESTIGO+ pide aprobación, la cápsula (recortes, voz, aprobar/negar) aparece ahí mismo. |
-| `#/demo/result` | 4 Resultado: un solo desenlace grande (bloqueado y por qué, entregado en tu tienda, entregado al atacante, el agente se detuvo solo, error), la comparación con la otra corrida del mismo escenario, el recibo con «Verify receipt», y la evidencia (código vs. píxeles, aprobado vs. ejecutado, dónde estaba el ataque, todos los pasos) detrás de desplegables. «Run another» y «Compare without TESTIGO+». |
+| `#/demo/result` | 4 Resultado: un solo desenlace grande (bloqueado y por qué, entregado en tu bodega, entregado al atacante, el agente se detuvo solo, error), la comparación con la otra corrida del mismo escenario, el recibo con «Verify receipt», y la evidencia (código vs. píxeles, aprobado vs. ejecutado, dónde estaba el ataque, todos los pasos) detrás de desplegables. «Run another» y «Compare without TESTIGO+». |
 | `#/results` | WitnessBench simple: las tres cifras y una tabla por escenario y modo. |
 | `#/present[/0-8]` | Las 9 vistas de antes, para grabar. Sin enlace en la navegación; `#/N` viejos llevan ahí. |
 
@@ -177,6 +179,6 @@ Las cifras de la portada y de `#/results` salen de `GET /api/bench` (`runs/bench
 
 **Buenas prácticas aplicadas:** botones y enlaces reales, etiquetas en cada control, foco visible, foco al título al cambiar de paso, `aria-live` con el estado de la corrida, contraste ≥ 4.5:1 (`--faint` pasó a `#6B6A66`), sin scroll horizontal a 375 px, estados de carga, vacío y error en cada paso, y la nota «simulation only» en el pie y en el paso 2. La jerga (SAM, hashes, `cannot_verify`, F8) solo aparece dentro de los desplegables y en el presentador.
 
-**Ataques endurecidos (1 nov, `03-revision-31-oct.md` §12).** A3 pasa a «Tampered delivery address» («A script shows another street under your shop’s name») en la tarjeta del paso 2, en la portada (tarjeta A3 y maqueta de la revisión: `Tienda Doña Marta · Carrera 80 # 7-15`) y en las barras de la vista 8. Los textos de A1/A2 no cambian.
+**Ataques endurecidos (1 nov, `03-revision-31-oct.md` §12).** A3 pasa a «Tampered delivery address» («A script shows another street under your company’s name») en la tarjeta del paso 2, en la portada (tarjeta A3 y maqueta de la revisión: `Larkspur Market · 88 Mill Street, Riverton`) y en las barras de la vista 8. Los textos de A1/A2 no cambian.
 
 **Pruebas:** `tests/test_ui.py` (Chromium) cubre portada, resultados, los 4 pasos y los desenlaces con eventos de prueba; `tests/test_service.py` cubre `/api/run` con un proceso falso. Ninguna prueba corre el agente real ni llama a Meta.

@@ -2,22 +2,24 @@
 
 28 de octubre de 2026 · Borrador para aprobación
 
-Concreta la fila F1 del spec general: la dueña dice, hablando, qué puede hacer el agente, y queda una política firmada que el motor (F6) hace cumplir. Si algo aquí contradice a `00-spec-general.md`, `01-spec-construccion.md` o `02-spec-vistas-maquetas.md`, mandan esos. Todo es simulación; la voz, la compilación y la firma son reales.
+Concreta la fila F1 del spec general: el dueño de la empresa dice, hablando, qué puede hacer el agente, y queda una política firmada que el motor (F6) hace cumplir. Si algo aquí contradice a `00-spec-general.md`, `01-spec-construccion.md` o `02-spec-vistas-maquetas.md`, mandan esos. Todo es simulación; la voz, la compilación y la firma son reales.
 
 > **1 nov (R2):** la política antes ataba un pago a una cuenta; ahora ata el pedido a una dirección de entrega (`03-revision-31-oct.md` §10).
+
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
 
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
 | --- | --- | --- | --- |
 | F1-D1 | Qué compila la voz en reglas: Glimmer local o Spark por API | Spark por API (a través de `common/meta_client.py`); Glimmer solo si hay una GPU de 24 GB (opcional, del spec general). La compilación pide a Spark una extracción con formato fijo, no una decisión. | la política |
-| F1-D2 | La política ata el destino solo por nombre (hueco 1 de F0) | Atar también la dirección: `deliver_only` guarda nombre **y** dirección (`Tienda Doña Marta · Calle 45 # 12-30, Bogotá`). Un cambio de dirección con el nombre intacto ya no cumple la regla 3. | F6 |
+| F1-D2 | La política ata el destino solo por nombre (hueco 1 de F0) | Atar también la dirección: `deliver_only` guarda nombre **y** dirección (`Larkspur Market · 120 Harbor Road, Unit 4, Riverton`). Un cambio de dirección con el nombre intacto ya no cumple la regla 3. | F6 |
 | F1-D3 | Qué firma la política | Una firma Ed25519 del par de llaves del dueño (el mismo de los recibos, `receipts/keys.py`), más el registro de que un passkey la respaldó (F7). El archivo guarda su `sha256` y su firma. | F9 |
 | F1-D4 | Si la compilación por voz es en vivo en la demo o preparada antes | En vivo en la vista 1: se graba, se transcribe y se compila mientras se ve. La política resultante se firma y queda en un archivo que el resto del sistema lee. | la vista 1 |
 
 ## 1. Objetivo
 
-Que la dueña defina los límites del agente hablando, y que de ahí salga un archivo de política firmado y legible por máquina, con tres reglas: a qué dirección se puede entregar, el máximo por pedido, y cuándo preguntar. El motor (F6) lo hace cumplir; la interfaz (vista 1) muestra la onda, la transcripción y las reglas compiladas con su sello.
+Que el dueño defina los límites del agente hablando, y que de ahí salga un archivo de política firmado y legible por máquina, con tres reglas: a qué dirección se puede entregar, el máximo por pedido, y cuándo preguntar. El motor (F6) lo hace cumplir; la interfaz (vista 1) muestra la onda, la transcripción y las reglas compiladas con su sello.
 
 Fuera de alcance de F1: decidir sobre una acción (F6), aprobar un pedido (F7). F1 solo produce la política.
 
@@ -25,7 +27,7 @@ Fuera de alcance de F1: decidir sobre una acción (F6), aprobar un pedido (F7). 
 
 **Entradas**
 
-- La voz de la dueña por el micrófono del navegador.
+- La voz del dueño por el micrófono del navegador.
 - Un passkey para respaldar la política (F7-D1, F1-D3).
 
 **Salidas**
@@ -40,16 +42,16 @@ Del spec de construcción, con la dirección atada (F1-D2) y la firma (F1-D3):
 
 ```yaml
 version: 1
-owner: marta
+owner: larkspur
 source: voice
-transcript: "Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido"
+transcript: "Only ship to our warehouse, at most fifteen hundred dollars per order"
 rules:
   - deliver_only:
-      - name: "Tienda Doña Marta"
-        address: "Calle 45 # 12-30, Bogotá"
-  - max_per_order_cop: 150000
+      - name: "Larkspur Market"
+        address: "120 Harbor Road, Unit 4, Riverton"
+  - max_per_order_cents: 150000   # USD 1,500.00
   - ask_before: new_address
-signed_by: passkey:marta
+signed_by: passkey:larkspur
 sha256: "...."
 signature: "ed25519:...."
 ```
@@ -60,21 +62,21 @@ signature: "ed25519:...."
 
 ## 4. Cómo se compila la voz
 
-1. Se graba la voz y se transcribe con Voice Transcribe (español), vía `common/meta_client.py`.
-2. Se le pide a Spark (o Glimmer) una extracción con formato fijo: de la transcripción, sacar el destino permitido («la tienda» o «Tienda Doña Marta» y, si se dice, la dirección), el máximo por pedido en pesos, y si pide preguntar antes de una dirección nueva. Spark devuelve esos campos en un esquema fijo; no decide nada ni recibe instrucciones de la transcripción como órdenes.
+1. Se graba la voz y se transcribe con Voice Transcribe (inglés), vía `common/meta_client.py`.
+2. Se le pide a Spark (o Glimmer) una extracción con formato fijo: de la transcripción, sacar el destino permitido («our warehouse», «the warehouse» o «Larkspur Market» y, si se dice, la dirección), el máximo por pedido en centavos de dólar, y si pide preguntar antes de una dirección nueva. Spark devuelve esos campos en un esquema fijo; no decide nada ni recibe instrucciones de la transcripción como órdenes.
 3. Se arma el YAML, se calcula el `sha256` y se firma con Ed25519 (`receipts/keys.py`), respaldado por el passkey.
 4. El archivo queda donde el resto del sistema lo lee (`policy/` o `runs/`, a decidir al implementar).
 
-La dirección de la tienda no se dicta en el mandato («Solo pide con entrega en la tienda…»): sale del perfil de la tienda en la configuración. Esto se anota como simulado.
+La dirección de la bodega no se dicta en el mandato («Only ship to our warehouse…»): sale del perfil de la empresa compradora (`BUYER`) en la configuración. Esto se anota como simulado.
 
 ## 5. Criterios de aceptación de F1
 
-1. Una grabación de la frase de ejemplo produce una política con `deliver_only` = Tienda Doña Marta (nombre y dirección), `max_per_order_cop` = 150000 y `ask_before` = new_address.
+1. Una grabación de la frase de ejemplo produce una política con `deliver_only` = Larkspur Market (nombre y dirección), `max_per_order_cents` = 150000 (USD 1,500.00) y `ask_before` = new_address.
 2. El archivo lleva un `sha256` correcto y una firma Ed25519 válida para ese contenido.
 3. `interceptor/policy.py` lee el formato nuevo (nombre y dirección) y su hash coincide con el que reporta.
 4. La vista 1 muestra los tres estados (escuchando, transcribiendo, firmada) desde eventos reales.
 5. La compilación usa Spark (o Glimmer) solo como extractor de formato fijo; la transcripción nunca se ejecuta como instrucción.
-6. La voz numérica en español cumple el umbral del gate (95 % exacto, menos de 1,5 s).
+6. La voz numérica en inglés cumple el umbral del gate (95 % exacto, menos de 1,5 s).
 
 ## 6. Qué se prueba con modelos reales y qué con datos de prueba
 
@@ -91,9 +93,11 @@ La transcripción y la extracción son de modelos reales; el armado y la firma s
 | Archivo | Se conserva | Cambia | Sale |
 | --- | --- | --- | --- |
 | `interceptor/policy.py` | La carga, el cálculo del hash, las comprobaciones de destino y monto | `deliver_only` con `{name, address}`; exigir que la dirección coincida (no solo el nombre); leer la firma | — |
-| `policy/marta.policy.yaml` | De ejemplo | Al formato nuevo (dirección atada, firma) | — |
+| `policy/larkspur.policy.yaml` | De ejemplo | Al formato nuevo (dirección atada, firma) | — |
 
 El compilador por voz es código nuevo (propuesta: `policy/compile.py`), con Voice y Spark a través de `common/meta_client.py` y la firma con `receipts/keys.py`. La vista 1 es parte de la interfaz (F11).
+
+Si se edita `policy/larkspur.policy.yaml` a mano, se vuelve a estampar y firmar con `.venv/bin/python -m policy.compile --stamp`.
 
 ## Hallazgos para los specs siguientes
 
@@ -106,29 +110,29 @@ El compilador por voz es código nuevo (propuesta: `policy/compile.py`), con Voi
 Hecha la compilación por voz real en `policy/compile.py` (subcomando `mandate`), con R8 aplicado (Spark por API, sin Glimmer ni passkey).
 
 1. **Voz.** Voice Transcribe sobre un WAV (`common/meta_client.py`, idioma detectado por la API).
-2. **Extracción.** Spark llena un esquema JSON fijo y estricto (`response_format` `json_schema`, `strict`; `reasoning_effort="low"`, `max_tokens=16000`): el destino (`name`, `address` solo si se dijo), el monto máximo copiado tal como se dijo (`max_amount_words`), ese monto en pesos y si pidió preguntar antes de una dirección nueva. La transcripción va como dato entre comillas, nunca como instrucción.
-3. **Validación por código.** Se rechaza (y no se firma nada) todo lo que salga del esquema: llaves de más o de menos, tipos distintos, contenido vacío o no JSON. Además se compara con la transcripción: el destino y las palabras del monto tienen que estar en lo que se dijo (sin tildes ni mayúsculas), y el monto se vuelve a leer por código (`approval/voice_match.spanish_to_int`, también «150 mil» y «150.000»). Si el entero de Spark no coincide con esa lectura, se rechaza.
-4. **Dirección atada por nombre (F1-D2).** La dirección sale del perfil de la tienda en la configuración (simulado). Un destino que no está en el perfil se rechaza; una dirección dicha que no coincide con la del perfil se rechaza. Siguen valiendo las negaciones y el rechazo de millones.
-5. **Preguntar antes.** `ask_before` queda siempre en `new_address` (por defecto seguro, criterio 1); si la dueña no lo dijo, la salida lo marca «por defecto».
-6. **Confirmación y firma.** Se imprimen la transcripción y las tres reglas; la dueña confirma en la terminal (`[s/N]`, o `--yes` en una demo guionada) en lugar del passkey (R8). Luego se estampa el `sha256` y se firma con Ed25519 con la llave del dueño (`SIGNING_KEY_PATH`). `signed_by` queda `owner-key:marta`.
-7. **Dónde queda.** Por defecto en `runs/mandate/marta.policy.yaml` (ignorado por git), para no pisar la política de la demo. Para que el interceptor la use: `--out runs/policy/active.policy.yaml` (ver «Política activa» abajo).
+2. **Extracción.** Spark llena un esquema JSON fijo y estricto (`response_format` `json_schema`, `strict`; `reasoning_effort="low"`, `max_tokens=16000`): el destino (`name`, `address` solo si se dijo), el monto máximo copiado tal como se dijo (`max_amount_words`), ese monto en centavos y si pidió preguntar antes de una dirección nueva. La transcripción va como dato entre comillas, nunca como instrucción.
+3. **Validación por código.** Se rechaza (y no se firma nada) todo lo que salga del esquema: llaves de más o de menos, tipos distintos, contenido vacío o no JSON. Además se compara con la transcripción: el destino y las palabras del monto tienen que estar en lo que se dijo (sin mayúsculas ni puntuación), y el monto se vuelve a leer por código con la lectura de números en inglés de `approval/voice_match.py` (también «1,500», «1500.00» y «$1,500»). Hace falta una señal de máximo («at most», «up to», «no more than», «maximum», «max», «limit»). Si el entero de Spark no coincide con esa lectura, se rechaza.
+4. **Dirección atada por nombre (F1-D2).** La dirección sale del perfil de la empresa (`BUYER`) en la configuración (simulado). Un destino que no está en el perfil se rechaza; una dirección dicha que no coincide con la del perfil se rechaza. Siguen valiendo las negaciones y el rechazo de millones.
+5. **Preguntar antes.** `ask_before` queda siempre en `new_address` (por defecto seguro, criterio 1); si el dueño no lo dijo, la salida lo marca «por defecto».
+6. **Confirmación y firma.** Se imprimen la transcripción y las tres reglas; el dueño confirma en la terminal (`[s/N]`, o `--yes` en una demo guionada) en lugar del passkey (R8). Luego se estampa el `sha256` y se firma con Ed25519 con la llave del dueño (`SIGNING_KEY_PATH`). `signed_by` queda `owner-key:larkspur`.
+7. **Dónde queda.** Por defecto en `runs/mandate/larkspur.policy.yaml` (ignorado por git), para no pisar la política de la demo. Para que el interceptor la use: `--out runs/policy/active.policy.yaml` (ver «Política activa» abajo).
 
 Para correrlo en vivo (necesita `.env` con `META_API_BASE_URL`, `META_API_KEY`, `META_MODEL_VOICE` y `META_MODEL_SPARK`):
 
 ```sh
-sh scripts/make_mandate_wav.sh /tmp/mandato.wav      # macOS: voz Paulina → WAV 16 kHz mono
+sh scripts/make_mandate_wav.sh /tmp/mandato.wav      # macOS: voz en inglés (Samantha, Alex o Daniel, la que exista) → WAV 16 kHz mono
 .venv/bin/python -m policy.compile mandate /tmp/mandato.wav
 .venv/bin/python -m policy.compile mandate /tmp/mandato.wav --out runs/policy/active.policy.yaml   # la vuelve la activa
-.venv/bin/python -m policy.compile mandate --text "Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido"   # sin Voice
+.venv/bin/python -m policy.compile mandate --text "Only ship to our warehouse, at most fifteen hundred dollars per order"   # sin Voice
 ```
 
 Pruebas sin red en `tests/test_policy_compile.py` con un cliente falso: rechazo por esquema, dirección atada, destino desconocido o no dicho, monto releído, hash estampado y firma válida, nada escrito si no se confirma. El audio no se guarda en el repositorio.
 
 ### Mandato en vivo desde la vista 1 (1 nov)
 
-- **Grabar.** «Record mandate» en la vista 1 graba el micrófono del navegador (el mismo grabador WAV de la vista 5) y lo envía a `POST /api/mandate/draft` (JSON con el WAV en base64). El servicio transcribe con Voice (`common/meta_client.transcribe`) y compila con `policy/compile.compile_mandate`: las mismas reglas que el CLI (dirección del perfil de la tienda, negaciones, rechazo de millones). Devuelve el borrador sin firmar, o el motivo del rechazo y lo que oyó. Un rechazo no cambia nada.
+- **Grabar.** «Record mandate» en la vista 1 graba el micrófono del navegador (el mismo grabador WAV de la vista 5) y lo envía a `POST /api/mandate/draft` (JSON con el WAV en base64). El servicio transcribe con Voice (`common/meta_client.transcribe`) y compila con `policy/compile.compile_mandate`: las mismas reglas que el CLI (dirección del perfil de la empresa, negaciones, rechazo de millones). Devuelve el borrador sin firmar, o el motivo del rechazo y lo que oyó. Un rechazo no cambia nada.
 - **Firmar y usar.** `POST /api/mandate/sign` con el `id` del borrador firma exactamente ese borrador guardado en el servicio (la página no puede mandar reglas propias) con la llave del dueño (`SIGNING_KEY_PATH`; si no está, 409 y no se crea). La llave nunca sale del servicio.
-- **Política activa.** `common.config.policy_path()` es la única resolución: `RUNS_DIR/policy/active.policy.yaml` si existe, si no la `policy/marta.policy.yaml` del repo. La usan el servicio (`/api/policy`, `/status`), el bucle (y por él WitnessBench) y `testigo verify`. El servicio la escribe de forma atómica (archivo temporal en la misma carpeta, revisa hash y firma, `os.replace`). La del repo nunca se escribe desde la interfaz; para volver a ella basta borrar la activa. Ojo: un recibo firmado con otra política falla el paso 1 de `verify` contra la activa (`--policy` elige otra).
+- **Política activa.** `common.config.policy_path()` es la única resolución: `RUNS_DIR/policy/active.policy.yaml` si existe, si no la `policy/larkspur.policy.yaml` del repo. La usan el servicio (`/api/policy`, `/status`), el bucle (y por él WitnessBench) y `testigo verify`. El servicio la escribe de forma atómica (archivo temporal en la misma carpeta, revisa hash y firma, `os.replace`). La del repo nunca se escribe desde la interfaz; para volver a ella basta borrar la activa. Ojo: un recibo firmado con otra política falla el paso 1 de `verify` contra la activa (`--policy` elige otra).
 - **Protecciones.** Las mismas de la aprobación: solo Host local, solo el Origin del servicio, cuerpo JSON con tope de tamaño, WAV mono PCM de 0,3 a 20 s, audio en un archivo temporal que se borra.
 - **Pruebas.** `tests/test_mandate_live.py` (cliente falso: borrador, rechazos, protecciones, firma que la vuelve activa, la del repo intacta, resolución) y `tests/test_ui.py` (estados de la vista 1 en Chromium).
 

@@ -18,7 +18,9 @@ Routes
   GET  /api/receipt  the newest receipt.json under runs/, or ?path= (view 7)
   POST /api/verify   runs the real `testigo verify` on that receipt (view 7)
   GET  /api/bench    runs/bench_results.json, else the newest committed
-                     results/witnessbench-*.json, or "not available";
+                     results/witnessbench-*.json, or "not available"; says
+                     whether it was measured in the current scenario
+                     ("current"; config.SCENARIO);
                      ?complete=1 skips a local run marked "complete": false
   POST /api/run      {scenario, variant?, supervised, explain?, headed?}: start one
                      real run (`agent.run` as a subprocess); 409 while one runs
@@ -372,9 +374,9 @@ async def approval_open(request: Request):
         raise HTTPException(422, str(e))
     if event["type"] != "approval.requested":
         raise HTTPException(422, "event must be an approval.requested event")
-    amount = event.get("amount_cop")
+    amount = event.get("amount_cents")
     if not isinstance(amount, int) or isinstance(amount, bool):
-        raise HTTPException(422, "approval.requested.amount_cop must be an integer (whole pesos)")
+        raise HTTPException(422, "approval.requested.amount_cents must be an integer (cents)")
     return _desk(desk.open, event, crop_images(body.get("images")))
 
 
@@ -426,11 +428,11 @@ async def approval_decision(approval_id: str, request: Request):
 #
 # The page records the owner saying the mandate, the service transcribes it
 # (Voice) and compiles it with policy/compile.py: the same rules as the
-# `policy.compile mandate` CLI (address from the shop profile, negations,
+# `policy.compile mandate` CLI (address from the buyer profile, negations,
 # millions refused). The draft stays here; "Sign and use" signs exactly that
 # draft with the owner key and writes it, atomically, to
 # RUNS_DIR/policy/active.policy.yaml, which config.policy_path() then serves to
-# every consumer. The committed policy/marta.policy.yaml is never written. A
+# every consumer. The committed policy/larkspur.policy.yaml is never written. A
 # refused mandate changes nothing.
 
 MAX_MANDATE_SECONDS = MAX_VOICE_SECONDS
@@ -464,7 +466,7 @@ def _draft_view(draft_id, pol, info):
     from policy.compile import describe
     p = Policy(pol)
     return {"status": "draft", "id": draft_id, "transcript": p.transcript,
-            "deliver_only": p.deliver_only, "max_per_order_cop": p.max_per_order_cop,
+            "deliver_only": p.deliver_only, "max_per_order_cents": p.max_per_order_cents,
             "ask_before": p.ask_before, "ask_before_said": bool(info.get("ask_before_said")),
             "max_amount_words": info.get("max_amount_words", ""),
             "voice_ms": info.get("voice_ms"), "spark_ms": info.get("spark_ms"),
@@ -589,7 +591,7 @@ def policy_view(policy, path):
         "source": policy.source,
         "transcript": policy.transcript,
         "deliver_only": policy.deliver_only,
-        "max_per_order_cop": policy.max_per_order_cop,
+        "max_per_order_cents": policy.max_per_order_cents,
         "ask_before": policy.ask_before,
         "signed_by": policy.signed_by,
         "sha256": policy.sha256(),
@@ -652,16 +654,26 @@ def bench_file(complete=False):
     return _committed_bench()
 
 
+def bench_scenario(data):
+    """(current, scenario) of a results file: current only when it was measured
+    in this scenario (config.SCENARIO). The 31 Oct files carry no scenario (they
+    are from the earlier one) and are history."""
+    scenario = data.get("scenario") if isinstance(data, dict) else None
+    return scenario == config.SCENARIO, scenario
+
+
 @app.get("/api/bench")
 def api_bench(complete: bool = False):
     p, label = bench_file(complete)
     if p is None:
         return {"available": False}
     try:
-        return {"available": True, "source": label,
-                "data": json.loads(p.read_text(encoding="utf-8"))}
+        data = json.loads(p.read_text(encoding="utf-8"))
     except ValueError:
         return {"available": False, "source": label, "error": "%s is not valid JSON" % p.name}
+    current, scenario = bench_scenario(data)
+    return {"available": True, "source": label, "current": current,
+            "scenario": scenario, "data": data}
 
 
 # -- start a run from the interface ------------------------------------------
@@ -1020,7 +1032,7 @@ def status_page():
 h1{{color:#104281;font-size:22px}} td{{padding:4px 16px 4px 0}} .muted{{color:#52514E;font-size:14px}}</style>
 </head><body>
 <h1>TESTIGO+ interceptor &middot; running</h1>
-<p class="muted">Simulation only: simulated shop, supplier and addresses. {time}</p>
+<p class="muted">Simulation only: simulated buyer, supplier and addresses. {time}</p>
 <p>Portal: <a href="{portal}/orders/new?scenario=clean">{portal}</a></p>
 <p>Policy: {sha} &middot; hash {hok}</p>
 <p>Signing key: {key}</p>

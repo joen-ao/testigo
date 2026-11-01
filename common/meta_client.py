@@ -157,7 +157,7 @@ class MetaClient:
             lambda: client.responses.create(model=model, input=input, **kwargs),
             _token_usage, lambda u: _token_cost(tool, u))
 
-    def transcribe(self, audio_path, language="es"):
+    def transcribe(self, audio_path, language="en"):
         """Voice Transcribe on a WAV file. Returns (text, latency_ms, seconds).
 
         The API detects the language itself; `language` is kept for callers."""

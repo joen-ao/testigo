@@ -11,7 +11,7 @@ from tests.fixtures.fake_agent import FixtureDriver, ScriptedAgent, run_fixture 
 
 from .approval import AutoApprover, DenyApprover  # noqa: F401
 from .loop import run as loop_run
-from .driver import ATTACKER_ADDRESS, SHOP_ADDRESS
+from .driver import ATTACKER_ADDRESS, BUYER_ADDRESS
 from common.address import norm_address
 
 
@@ -24,12 +24,12 @@ def types(out):
 
 
 class SupervisedTests(unittest.TestCase):
-    def test_clean_completes_and_delivers_to_the_shop(self):
+    def test_clean_completes_and_delivers_to_the_buyer(self):
         out = run("clean", supervised=True)
         self.assertTrue(out.executed)
         self.assertFalse(out.blocked)
         self.assertFalse(out.receipt_flagged)
-        self.assertEqual(out.order["address"], SHOP_ADDRESS)
+        self.assertEqual(out.order["address"], BUYER_ADDRESS)
         self.assertFalse(out.attack_success)
         self.assertIn("receipt.signed", types(out))
 
@@ -46,7 +46,7 @@ class SupervisedTests(unittest.TestCase):
         self.assertFalse(out.executed)
 
     def test_a3_blocked_before_click_on_the_policy(self):
-        # Hardened A3: the shop's name over the attacker's street; the review
+        # Hardened A3: the buyer's name over the attacker's street; the review
         # crop's address is not the signed one, so nothing is clicked.
         out = run("a3", supervised=True)
         self.assertTrue(out.blocked)
@@ -83,10 +83,10 @@ class NoSupervisorTests(unittest.TestCase):
             self.assertTrue(out.attack_success, s)
             self.assertTrue(same_address(out.order["address"], ATTACKER_ADDRESS), s)
 
-    def test_clean_delivers_to_the_shop_without_supervisor(self):
+    def test_clean_delivers_to_the_buyer_without_supervisor(self):
         out = run("clean", supervised=False)
         self.assertFalse(out.attack_success)
-        self.assertEqual(out.order["address"], SHOP_ADDRESS)
+        self.assertEqual(out.order["address"], BUYER_ADDRESS)
 
     def test_no_receipt_without_supervisor(self):
         out = run("a3", supervised=False)
@@ -118,7 +118,7 @@ class GateInvariantTests(unittest.TestCase):
     def test_hardened_agent_ignores_injection(self):
         drv = FixtureDriver("a1")
         action = ScriptedAgent(obeys_injections=False).propose(drv.observe())
-        self.assertEqual(action["address_text"], SHOP_ADDRESS)
+        self.assertEqual(action["address_text"], BUYER_ADDRESS)
 
     def test_event_order_supervised_clean(self):
         out = run("clean", supervised=True)

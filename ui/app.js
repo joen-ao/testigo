@@ -137,7 +137,11 @@ function esc(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-function cop(n) { return n == null ? "—" : "COP " + Number(n).toLocaleString("en-US"); }
+// Amounts are integer cents; shown as "USD 1,240.00" (common/money.py usd).
+function usd(n) {
+  return n == null || !Number.isFinite(Number(n)) ? "—"
+    : "USD " + (Number(n) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function short(h) { return h ? h.slice(0, 4) + "…" + h.slice(-4) : "—"; }
 function time(ts) { const m = /T(\d\d:\d\d:\d\d)/.exec(ts || ""); return m ? m[1] : ""; }
 function runUrl(p) { return "/runs/" + String(p).split("/").map(encodeURIComponent).join("/"); }
@@ -151,61 +155,46 @@ function allowedAddresses() {
 // -- F8: compare by the values read from the pixels (receipts/receipt.py norm_read)
 // Real crops of unchanged content hash differently across captures, so view 6
 // never compares hashes when read values exist.
-// A Colombian street address in canonical form, as common/address.py does it
-// (keep the two in step; tests/test_ui.py checks they agree): street type (and
-// its abbreviations), letter/"bis" suffixes per number ("45A", "45 Bis"),
-// quadrant ("Sur", ...), "#"/"No."/"N°"/"número", en/em dashes (a space after
-// an explicit separator), I/l/O misread for 1/1/0 in digit places, ASCII digits
-// only; up to four words after it are part of it (addrTail: complements, quadrants,
-// capitalized words; not the city "Bogotá"/"D.C." nor the shop's name when it is all that is left)
-// -> "calle 45 # 12-30", "calle 45a bis # 12-30 sur".
+// A street address in canonical form, as common/address.py does it (keep the
+// two in step; tests/test_ui.py checks they agree): house number (I/l/O misread
+// for 1/1/0, leading zeros dropped, an attached letter kept), an optional
+// directional (North/N ...), 1-3 name words, the street type and its
+// abbreviations (Road/Rd, Street/St, Avenue/Ave, Boulevard/Blvd, Lane/Ln,
+// Drive/Dr); up to four words after it are part of it (addrTail: complements
+// with the word after them, directionals, capitalized words; not the city
+// "Riverton" nor the buyer's name when it is all that is left)
+// -> "120 harbor road unit 4", "88 mill street".
 const STREET_TYPES = {
-  calle: "calle", cll: "calle", cl: "calle",
-  carrera: "carrera", cra: "carrera", kra: "carrera", kr: "carrera", cr: "carrera",
-  avenida: "avenida", avda: "avenida", av: "avenida",
-  diagonal: "diagonal", diag: "diagonal", dg: "diagonal",
-  transversal: "transversal", transv: "transversal", tv: "transversal", tr: "transversal",
+  road: "road", rd: "road", street: "street", st: "street", avenue: "avenue", ave: "avenue",
+  boulevard: "boulevard", blvd: "boulevard", lane: "lane", ln: "lane", drive: "drive", dr: "drive",
 };
-const QUADRANTS = ["sur", "este", "norte", "oeste"];
-const CITY_WORDS = new Set(["bogota", "dc"]);
+const DIRECTIONALS = { north: "north", n: "north", south: "south", s: "south",
+  east: "east", e: "east", west: "west", w: "west" };
+// Complement words: they and the word after them belong to the address.
+const COMPLEMENTS = { unit: "unit", suite: "suite", ste: "suite", apt: "apt", apartment: "apt",
+  bldg: "bldg", building: "bldg", dock: "dock" };
+const CITY_WORDS = new Set(["riverton"]);
 const TAIL_MAX = 4;
 const ci = w => w.replace(/[a-z]/g, c => `[${c}${c.toUpperCase()}]`);
 const W = "[\\p{L}\\p{N}_]";
-const ADDR_STREET = Object.keys(STREET_TYPES).sort((a, b) => b.length - a.length).map(ci).join("|");
-const ADDR_NUM = "(?=[0-9IlO]{0,2}[0-9])[0-9IlO]{1,3}";
-const ADDR_LET = `[A-Za-z](?!${W})`;
-const ADDR_BIS = `${ci("bis")}(?!${W})`;
-const ADDR_SEP = `(?:#|${ci("n")}[oOº°]\\.?|${ci("n")}\\.\\s?[oOº°]|${ci("nro")}\\.?|${ci("n")}[uUúÚ]${ci("mero")})`;
-const ADDR_DASH = "[\\-–—]";
-function addrGroup(k, last) {
-  const suffix = last ? `(?:${ADDR_LET})?(?:\\s*${ADDR_BIS})?`
-                      : `(?:\\s?${ADDR_LET})?(?:\\s*${ADDR_BIS}(?:\\s?${ADDR_LET})?)?`;
-  return `(?<n${k}>${ADDR_NUM})(?<s${k}>${suffix})(?!${W})`;
-}
-const ADDR_SRC = `(?<!${W})(?<street>${ADDR_STREET})\\.?\\s*${addrGroup("1")}` +
-  `(?:\\s+(?<quad>${QUADRANTS.map(ci).join("|")})(?!${W}))?\\s*` +
-  `(?:(?:${ADDR_SEP}\\s*)?${addrGroup("2a")}\\s*${ADDR_DASH}\\s*${addrGroup("3a", true)}` +
-  `|${ADDR_SEP}\\s*${addrGroup("2b")}\\s+${addrGroup("3b", true)})(?![.,][0-9])`;
+const byLen = o => Object.keys(o).sort((a, b) => b.length - a.length).map(ci).join("|");
+const ADDR_NUM = "(?=[0-9IlO]{0,4}[0-9])[0-9IlO]{1,5}";
+const ADDR_WORD = `(?:[A-Za-z][A-Za-z'\\-]*|[0-9]{1,3}(?:${["st", "nd", "rd", "th"].map(ci).join("|")}))(?![0-9A-Za-z])`;
+const ADDR_SRC = `(?<![\\p{L}\\p{N}_.,$#\\-])(?<num>${ADDR_NUM})(?<sfx>[A-Za-z])?(?!${W})` +
+  `\\s+(?:(?<pre>${byLen(DIRECTIONALS)})(?!${W})\\.?\\s+)?` +
+  `(?<name>${ADDR_WORD}(?:\\s+${ADDR_WORD}){0,2}?)` +
+  `\\s+(?<type>${byLen(STREET_TYPES)})(?!${W})(?<dot>\\.)?`;
 const ADDRESS_RE = new RegExp(ADDR_SRC, "gu");
 const ADDRESS_AT = new RegExp(ADDR_SRC, "uy");
 function fold(t) {
   return String(t).normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
 }
-// The shop's name (common/config.py SHOP): exactly that after an address is the
+// The buyer's name (common/config.py BUYER): exactly that after an address is the
 // label the portal shows next to the field, not part of the address.
-const SHOP_NAME = "Tienda Doña Marta";
-const SHOP_WORDS = fold(SHOP_NAME).split(" ").map(w => w.replace(/\./g, ""));
+const BUYER_NAME = "Larkspur Market";
+const BUYER_WORDS = fold(BUYER_NAME).split(" ").map(w => w.replace(/\./g, ""));
 function ocrDigits(t) { return t.replace(/[Il]/g, "1").replace(/O/g, "0").replace(/^0+(?=[0-9])/, ""); }
-function addrNumber(num, suffix) {
-  const s = (suffix || "").replace(/\s+/g, "").toLowerCase();
-  const k = s.indexOf("bis");
-  const head = k < 0 ? s : s.slice(0, k), after = k < 0 ? "" : s.slice(k + 3);
-  return ocrDigits(num) + head + (k < 0 ? "" : " bis") + (after ? " " + after : "");
-}
 const isWordStart = c => /^[\p{L}0-9]$/u.test(c);
-// Complement words: they and the word after them belong to the address.
-const COMPLEMENTS = new Set(["int", "interior", "apto", "apartamento", "apt", "ap", "torre",
-  "bloque", "bl", "casa", "local", "piso", "of", "oficina", "etapa", "manzana", "mz", "lote", "conjunto"]);
 // [folded word without dots, first character upper-case in the text]
 function addrSegment(text, i) {
   const words = [], n = text.length;
@@ -217,21 +206,33 @@ function addrSegment(text, i) {
     if (ADDRESS_AT.test(text)) return words;
     let j = i;
     while (j < n && (isWordStart(at(j)) || text[j] === ".")) j += at(j).length;
-    words.push([fold(text.slice(i, j)).replace(/\./g, ""), /^\p{Uppercase}$/u.test(at(i))]);
+    const word = fold(text.slice(i, j)).replace(/\./g, "");
+    words.push([word, /^\p{Uppercase}$/u.test(at(i))]);
+    // a full stop ends the sentence ("Unit 4. Next"), unless after a complement or directional
+    if (text[j - 1] === "." && !Object.prototype.hasOwnProperty.call(COMPLEMENTS, word)
+        && !Object.prototype.hasOwnProperty.call(DIRECTIONALS, word)) return words;
     i = j;
   }
 }
 // The words after an address that belong to it (common/address.py _tail):
-// a complement and the word after it; a quadrant or a capitalized word; cities
-// skipped; the exact shop name, or any other (lower-case) word, ends it.
+// a complement and the word after it; a directional or a capitalized word; the
+// city skipped; the exact buyer name, or any other (lower-case) word, ends it.
 function addrTail(text, i) {
   const out = [], seg = addrSegment(text, i), words = seg.map(w => w[0]);
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   for (let k = 0; k < words.length && out.length < TAIL_MAX; k++) {
     const [word, capital] = seg[k];
-    if (words.slice(k).join(" ") === SHOP_WORDS.join(" ")) break;
+    if (words.slice(k).join(" ") === BUYER_WORDS.join(" ")) break;
     if (CITY_WORDS.has(word)) continue;
-    if (COMPLEMENTS.has(word)) { out.push(...words.slice(k, k + 2)); k++; }
-    else if (QUADRANTS.includes(word) || capital) out.push(word);
+    if (has(COMPLEMENTS, word)) {
+      out.push(COMPLEMENTS[word]);
+      if (k + 1 < words.length) {
+        const nxt = words[k + 1];
+        out.push(/^[0-9]+$/.test(nxt) ? (nxt.replace(/^0+/, "") || "0") : nxt);
+      }
+      k++;
+    } else if (has(DIRECTIONALS, word)) out.push(DIRECTIONALS[word]);
+    else if (capital) out.push(word);
     else break;
   }
   return out.slice(0, TAIL_MAX);
@@ -240,26 +241,35 @@ function canonicalAddresses(text) {
   text = String(text == null ? "" : text).normalize("NFC");
   const found = new Set();
   for (const m of text.matchAll(ADDRESS_RE)) {
-    const g = m.groups, k = g.n2a ? "a" : "b";
-    const tail = (g.quad ? [g.quad.toLowerCase()] : []).concat(addrTail(text, m.index + m[0].length));
-    found.add([`${STREET_TYPES[g.street.toLowerCase()]} ${addrNumber(g.n1, g.s1)} # ` +
-               `${addrNumber(g["n2" + k], g["s2" + k])}-${addrNumber(g["n3" + k], g["s3" + k])}`, ...tail].join(" "));
+    const g = m.groups;
+    const head = [ocrDigits(g.num) + (g.sfx || "").toLowerCase()];
+    if (g.pre) head.push(DIRECTIONALS[g.pre.toLowerCase()]);
+    const street = g.type.toLowerCase();
+    head.push(...g.name.toLowerCase().split(/\s+/), STREET_TYPES[street]);
+    // "Street." ends the sentence; "St." is an abbreviation ("St., Unit 4")
+    const ends = g.dot && STREET_TYPES[street] === street;
+    found.add(head.concat(ends ? [] : addrTail(text, m.index + m[0].length)).join(" "));
   }
   return [...found].sort();
 }
-function amountDigits(text) {
+// The amount in integer cents (receipts/receipt.py _amount_cents): the largest
+// number in the text; a final 2-digit part after "." or "," is the cents, a
+// separator before 3 digits groups thousands: "USD 1,240.00" and "1240" -> "124000".
+function amountCents(text) {
   let best = "";
-  for (let n of text.match(/[0-9][0-9.,\s]*[0-9]|[0-9]/g) || []) {
-    n = n.replace(/\s/g, "").replace(/[.,][0-9]{2}$/, "");
-    const d = n.replace(/[^0-9]/g, "");
-    if (d.length > best.length) best = d;
+  for (let n of text.match(/[0-9]+(?:[.,\s][0-9]{3}(?![0-9]))*(?:[.,][0-9]{2}(?![0-9]))?/g) || []) {
+    n = n.replace(/\s/g, "");
+    const m = /^(.*)[.,]([0-9]{2})$/.exec(n);
+    const dollars = (m ? m[1] : n).replace(/[^0-9]/g, ""), cents = m ? m[2] : "00";
+    const v = (BigInt(dollars || "0") * 100n + BigInt(cents)).toString();
+    if (v.length > best.length || (v.length === best.length && v > best)) best = v;
   }
-  return best ? (best.replace(/^0+/, "") || "0") : "";
+  return best;
 }
 function normRead(name, text) {
   if (text == null) return null;
   text = String(text);
-  if (name === "amount") return amountDigits(text);
+  if (name === "amount") return amountCents(text);
   const found = canonicalAddresses(text);
   if (found.length) return found.join(",");
   return text.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
@@ -338,11 +348,11 @@ function logLine(e) {
       if (e.status === "ok") return [ICON.check, "ok", "Checked in pixels: ok", `${e.latency_ms} ms`];
       if (e.status === "cannot_verify") return [ICON.ask, "warn", "Cannot verify · blocked", e.reason];
       return [ICON.stop, "bad", e.status === "divergence" ? "Divergence · blocked" : "Policy violation · blocked", e.reason];
-    case "approval.requested": return [ICON.pause, "warn", "Approval requested", `${cop(e.amount_cop)} → ${e.address}`];
+    case "approval.requested": return [ICON.pause, "warn", "Approval requested", `${usd(e.amount_cents)} → ${e.address}`];
     case "approval.granted": return isGranted(e)
       ? [ICON.check, "ok", "Approved · voice + passkey", e.voice_transcript]
       : [ICON.stop, "bad", e.voice_match ? "Not approved · denied" : "Voice did not match · denied", e.voice_transcript];
-    case "order.confirmed": return [ICON.box, "info", "Portal recorded a confirmed order", `${cop(e.amount_cop)} → ${e.address}`];
+    case "order.confirmed": return [ICON.box, "info", "Portal recorded a confirmed order", `${usd(e.amount_cents)} → ${e.address}`];
     case "verify.result": {
       const review = e.moment === "review";
       if (e.status === "match") return [ICON.check, "ok", review ? "Review screen matches the approval" : "Verified after the click",
@@ -383,8 +393,8 @@ function crop(label, image, readText, hash, state, note, readUnder) {
 
 // view 1, live: record -> Voice -> policy/compile.py -> draft -> sign and use
 function ruleList(x) {
-  return `<ul class="mrules">${x.deliver_only.map(d => `<li><span class="k">Deliver only to</span> ${esc(d.name)} <span class="mono">· ${esc(d.address)}</span></li>`).join("")}
-    <li><span class="k">Max per order</span> ${esc(cop(x.max_per_order_cop))}</li>
+  return `<ul class="mrules">${x.deliver_only.map(d => `<li><span class="k">Ship only to</span> ${esc(d.name)} <span class="mono">· ${esc(d.address)}</span></li>`).join("")}
+    <li><span class="k">Max per order</span> ${esc(usd(x.max_per_order_cents))}</li>
     <li><span class="k">Ask before</span> ${esc(String(x.ask_before).replace(/_/g, " "))}</li></ul>`;
 }
 function mandateLive(p) {
@@ -410,7 +420,7 @@ function mandateLive(p) {
     body = `<div class="mcompare">
         <div class="panel mside draft"><div class="h">Draft from your voice · not signed</div>
           <div class="q">“${esc(d.transcript)}”</div>${ruleList(d)}
-          <div class="muted small">Address from the shop profile (simulated). ${d.ask_before_said ? "" : "“Ask before” was not said: default."}</div></div>
+          <div class="muted small">Address from your company profile (simulated). ${d.ask_before_said ? "" : "“Ask before” was not said: default."}</div></div>
         <div class="panel mside"><div class="h">Signed policy in use now</div>
           <div class="q">“${esc(p.transcript)}”</div>${ruleList(p)}
           <div class="muted small mono">sha256 ${esc(p.short_sha)}</div></div>
@@ -427,7 +437,7 @@ function mandateLive(p) {
   } else if (st === "transcribing") {
     body = `<div class="transcript wait">${PLAIN ? "Turning your words into rules…" : "Sending to Voice Transcribe, then compiling the rules…"}</div>`;
   } else if (recording) {
-    body = `${wave(st === "recording" ? "live" : "idle")}<div class="transcript wait">Say the limits, for example: “Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido”.</div>`;
+    body = `${wave(st === "recording" ? "live" : "idle")}<div class="transcript wait">Say the limits, for example: “Only ship to our warehouse, at most fifteen hundred dollars per order”.</div>`;
   }
   const err = m.error ? `<div class="verr">${ICON.warn}<span>${esc(m.error)}</span></div>` : "";
   return `<div class="panel mlive" id="mlive"><header><span class="t">${ICON.mic.replace("<svg", '<svg width="16" height="16"')} ${PLAIN ? "Record new rules" : "Say a new mandate"}</span>
@@ -504,8 +514,8 @@ function approvalCapsule() {
       const lines = [];
       if (voice.negated && voice.negated.length) lines.push(`Heard “${esc(voice.negated.join(" "))}”: a no or a cancel is never an approval`);
       else if (!voice.amount_match) lines.push(voice.heard_amount == null
-        ? `Amount: ${esc(voice.amount_reason || "none heard")} · screen ${esc(cop(a.amount_cop))}`
-        : `Amount heard ${esc(cop(voice.heard_amount))} · screen ${esc(cop(a.amount_cop))}`);
+        ? `Amount: ${esc(voice.amount_reason || "none heard")} · screen ${esc(usd(a.amount_cents))}`
+        : `Amount heard ${esc(usd(voice.heard_amount))} · screen ${esc(usd(a.amount_cents))}`);
       if (!voice.address_match) lines.push(`Destination “${esc(voice.address_name)}” not heard`);
       diff = `<div class="vdiff">${lines.map(l => `<div>${ICON.stop}<span>${l}</span></div>`).join("")}</div>`;
     }
@@ -538,8 +548,8 @@ function approvalCapsule() {
     const stamp = g ? `<div class="vstamp ${isGranted(g) ? "ok" : "bad"}">${isGranted(g) ? "Approved" : "Not approved"} at ${esc(time(g.ts))}${why}</div>` : "";
     return `<div class="capsule">
       <div class="crops">
-        ${crop("Amount", img.amount, cop(a.amount_cop), a.crops.amount)}
-        ${crop("Deliver to", img.address, a.address, a.crops.address)}
+        ${crop("Amount", img.amount, usd(a.amount_cents), a.crops.amount)}
+        ${crop("Ship to", img.address, a.address, a.crops.address)}
       </div>
       <div class="voice">
         <div class="head">${ICON.mic} ${PLAIN ? "Read the total and the address aloud" : "Read aloud to confirm"} ${vchip}</div>
@@ -565,8 +575,8 @@ function afterBody(r) {
     const a = r.approval || {};
     const shown = (n, side) => {
       const rd = side === "approved" ? ra : rx;
-      if (rd[n] != null) return n === "amount" && /^\d+$/.test(String(rd[n])) ? cop(rd[n]) : rd[n];
-      if (side === "approved") return n === "amount" ? cop(a.amount_cop) : a.address;
+      if (rd[n] != null) return n === "amount" && /^\d+$/.test(String(rd[n])) ? usd(Number(rd[n]) * 100) : rd[n];
+      if (side === "approved") return n === "amount" ? usd(a.amount_cents) : a.address;
       return null;
     };
     const cell = (n, side) => {
@@ -575,7 +585,7 @@ function afterBody(r) {
       const note = st === "diff" ? "read from the pixels · differs from what was approved"
         : st === "unread" ? "could not be read on this screen"
         : side === "approved" ? "read from the pixels when approved" : "read from the pixels · same as approved";
-      return crop(n === "amount" ? "Amount" : "Deliver to", (side === "approved" ? ia : ie)[n],
+      return crop(n === "amount" ? "Amount" : "Ship to", (side === "approved" ? ia : ie)[n],
                    txt == null ? "—" : txt, (side === "approved" ? v.approved : v.executed)[n], st, note, txt);
     };
     const mchip = e => !e ? chip("off", ICON.dot, "not reached")
@@ -587,7 +597,7 @@ function afterBody(r) {
         <div><span class="muted small">2 · Result, after the click</span>${vo.kind === "blocked" || (vo.kind === "cannot" && review)
           ? chip("off", ICON.dot, "never happened") : mchip(vo.result)}</div></div>`;
     const order = r.order;
-    const record = order ? `<div class="muted small" style="margin-top:8px">Portal record: ${esc(cop(order.amount_cop))} → <span class="mono">${esc(order.address)}</span></div>` : "";
+    const record = order ? `<div class="muted small" style="margin-top:8px">Portal record: ${esc(usd(order.amount_cents))} → <span class="mono">${esc(order.address)}</span></div>` : "";
     const diffs = diffFields(v);
     let stamp, verdict;
     if (vo.kind === "blocked") {
@@ -657,7 +667,7 @@ const render = {
         <div class="s"><div class="c">${ICON.user}</div>You approved</div><div class="j"></div>
         <div class="s"><div class="c">${ICON.box}</div>It executed</div>
       </div>
-      <div class="sim">Simulation only · simulated shop, supplier and addresses · no real brands</div>
+      <div class="sim">Simulation only · simulated company, supplier and addresses · no real brands</div>
     </div>`;
   },
 
@@ -678,10 +688,10 @@ const render = {
         </div>
         <div class="rules">
           ${p.deliver_only.map(x => `<div class="panel rule"><div class="ic">${ICON.user}</div><div>
-            <div class="k">Deliver only to</div><div class="v">${esc(x.name)} <span class="mono">· ${esc(x.address)}</span></div>
-            <div class="muted small">from the shop profile · simulated</div></div></div>`).join("")}
+            <div class="k">Ship only to</div><div class="v">${esc(x.name)} <span class="mono">· ${esc(x.address)}</span></div>
+            <div class="muted small">from your company profile · simulated</div></div></div>`).join("")}
           <div class="panel rule"><div class="ic">${ICON.box}</div><div>
-            <div class="k">Max per order</div><div class="v">${esc(cop(p.max_per_order_cop))}</div></div></div>
+            <div class="k">Max per order</div><div class="v">${esc(usd(p.max_per_order_cents))}</div></div></div>
           <div class="panel rule"><div class="ic">${ICON.ask}</div><div>
             <div class="k">Ask before</div><div class="v">${esc(String(p.ask_before).replace(/_/g, " "))}</div></div></div>
           <div class="seal${sealOk ? "" : " bad"}">${sealOk ? ICON.seal : ICON.stop}<div>
@@ -697,7 +707,7 @@ const render = {
     const r = S.runs.supervised;
     const st = r.mode ? agentState(r) : null;
     return `<h1 class="title">The agent at work</h1>
-      <p class="lede">Wonder restocks the shop on the supplier portal. TESTIGO+ watches every screen before an action runs.</p>
+      <p class="lede">Wonder restocks your warehouse on the supplier portal. TESTIGO+ watches every screen before an action runs.</p>
       <div class="split">
         <div class="panel"><header><span class="t">Supplier portal</span><span>${r.lastFrame != null ? "frame " + esc(r.lastFrame) : ""}</span>
           <span class="r mono">${esc(r.lastFrame != null ? short((r.frames[r.lastFrame] || {}).sha) : "")}</span></header>
@@ -719,10 +729,10 @@ const render = {
     const wrong = order && allowed.length && !allowed.includes(normRead("address", order.address));
     let alert = "";
     if (order && wrong) {
-      alert = `<div class="alert">${ICON.stop}<div><div class="t">Order confirmed for delivery to ${esc(order.address)} — ${esc(cop(order.amount_cop))}</div>
-        <div class="s">Not the shop's address in the owner's policy: the goods go to the attacker. Nothing checked what the agent saw before it clicked.</div></div></div>`;
+      alert = `<div class="alert">${ICON.stop}<div><div class="t">Order confirmed for delivery to ${esc(order.address)} — ${esc(usd(order.amount_cents))}</div>
+        <div class="s">Not your warehouse address in your signed policy: the goods go to the attacker. Nothing checked what the agent saw before it clicked.</div></div></div>`;
     } else if (order) {
-      alert = `<div class="alert neutral">${ICON.box}<div><div class="t">Order confirmed for delivery to ${esc(order.address)} — ${esc(cop(order.amount_cop))}</div>
+      alert = `<div class="alert neutral">${ICON.box}<div><div class="t">Order confirmed for delivery to ${esc(order.address)} — ${esc(usd(order.amount_cents))}</div>
         <div class="s">The order went to an allowed address in this run. It is recorded as it happened.</div></div></div>`;
     }
     return `<h1 class="title">Without TESTIGO+</h1>
@@ -813,6 +823,12 @@ const render = {
     const head = `<div class="k">Orders delivered to the attacker</div>`;
     const lbls = `<div class="lbls"><span>without TESTIGO+</span><span>with TESTIGO+</span></div>`;
     if (!b) return `<div class="bench">${head}</div>`;
+    if (b.available && b.current === false) {
+      return `<div class="bench">${head}
+        <div class="num none"><span>—</span><span class="arrow">→</span><span>—</span></div>${lbls}
+        <div class="notice warn">${ICON.warn}<div><b>Not measured yet in this scenario.</b>
+        <span class="mono">${esc(b.source || "")}</span> is from an earlier scenario and is kept as history, not shown as current.</div></div></div>`;
+    }
     const s = b.available && b.data && b.data.summary;
     const counted = x => x && Number.isFinite(x.succeeded) && Number.isFinite(x.runs);
     if (!s || !counted(s.attacks_succeed_without) || !counted(s.attacks_succeed_with)) {
@@ -845,7 +861,7 @@ const render = {
     const n = x => Number.isFinite(x) ? x : 0;
     const cleanLine = cb && typeof cb === "object"
       ? `<div class="clean muted">Clean runs with TESTIGO+${Number.isFinite(fp.clean_runs) ? ` (${esc(fp.clean_runs)})` : ""}:
-          ${esc(n(cb.delivered_to_shop))} delivered to the shop · ${esc(n(cb.blocked))} blocked${Array.isArray(cb.blocked_statuses) && cb.blocked_statuses.length ? ` <span class="mono">(${esc(cb.blocked_statuses.join(", "))})</span>` : ""}
+          ${esc(n(cb.delivered_to_buyer))} delivered to your warehouse · ${esc(n(cb.blocked))} blocked${Array.isArray(cb.blocked_statuses) && cb.blocked_statuses.length ? ` <span class="mono">(${esc(cb.blocked_statuses.join(", "))})</span>` : ""}
           · ${esc(n(cb.flagged))} flagged · ${esc(n(cb.never_reached_confirm))} never reached the confirmation${n(cb.other) ? ` · ${esc(cb.other)} other` : ""}</div>` : "";
     const flaggedAfter = Number(s.delivered_but_flagged) > 0
       ? `<div class="flagged">${esc(s.delivered_but_flagged)} of the orders delivered to the attacker with TESTIGO+: delivered, flagged after (the order went out; the receipt says so).</div>` : "";
@@ -922,7 +938,7 @@ async function runVerify() {
 // The service holds the approval the run is waiting on; it transcribes the
 // audio and compares it with the pixels. The page only records and shows.
 function sameApproval(x, a) {
-  return !!x && !!a && x.ts === a.ts && x.amount_cop === a.amount_cop && x.address === a.address
+  return !!x && !!a && x.ts === a.ts && x.amount_cents === a.amount_cents && x.address === a.address
     && !!x.crops && x.crops.amount === a.crops.amount && x.crops.address === a.crops.address;
 }
 function deskFor(a) { return S.desk && sameApproval(S.desk.event, a) ? S.desk : null; }

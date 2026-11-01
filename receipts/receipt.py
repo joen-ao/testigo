@@ -28,9 +28,9 @@ from . import keys
 CONFIRMED = "confirmed"   # the order was confirmed
 BLOCKED = "blocked"       # it never was; executed is null (F9-D4)
 CROP_NAMES = ("amount", "address")
-# A delivery address as a reader may return it (common.address): street type
-# and abbreviations, "#"/"No."/"N°"/"número", en/em dashes, and I/l/O misread
-# for 1/1/0 in digit places.
+# A delivery address as a reader may return it (common.address): house number,
+# directional, street name, street type and its abbreviations, and I/l/O
+# misread for 1/1/0 in the house number.
 ADDRESS_RE = _address.ADDRESS_RE
 
 
@@ -59,34 +59,37 @@ def new_id(now=None):
 
 
 def norm_read(name, text):
-    """A read value as compared: the amount's digits. The address: the
-    addresses in it in canonical form ("calle 45 # 12-30"), sorted,
-    de-duplicated, joined by ","; labels, names and the city around them
-    ("DELIVER TO", "Tienda Doña Marta", "Bogotá") differ between screens and do
-    not count. With no address, its letters and digits in lower case (spacing,
+    """A read value as compared: the amount in integer cents, as digits. The
+    address: the addresses in it in canonical form ("120 harbor road unit 4"),
+    sorted, de-duplicated, joined by ","; labels, names and the city around
+    them ("SHIP TO", "Larkspur Market", "Riverton") differ between screens and
+    do not count. With no address, its letters and digits in lower case (spacing,
     case and punctuation do not count)."""
     if text is None:
         return None
     if name == "amount":
-        return _amount_digits(str(text))
+        return _amount_cents(str(text))
     return _address.norm_address(text)
 
 
-def _amount_digits(text):
-    """The whole-currency digits of the largest number in `text`: "COP 120,000",
-    "$120.000,00" and "120000" all give "120000" (a 2-digit decimal part is dropped)."""
+_AMOUNT_RE = re.compile(r"[0-9]+(?:[.,\s][0-9]{3}(?![0-9]))*(?:[.,][0-9]{2}(?![0-9]))?")
+
+
+def _amount_cents(text):
+    """The amount in integer cents, as digits: the largest number in `text`.
+    A final 2-digit part after "." or "," is the cents; a separator before 3
+    digits groups thousands: "USD 1,240.00", "$1,240", "1240.00" and "1240"
+    all give "124000"."""
     # ASCII digits only, as ui/app.js reads them (Python's \d also takes "٣").
-    nums = re.findall(r"[0-9][0-9.,\s]*[0-9]|[0-9]", text)
-    if not nums:
-        return ""
     best = ""
-    for n in nums:
+    for n in _AMOUNT_RE.findall(text):
         n = re.sub(r"\s", "", n)
-        n = re.sub(r"[.,][0-9]{2}$", "", n)
-        d = re.sub(r"[^0-9]", "", n)
-        if len(d) > len(best):
-            best = d
-    return best.lstrip("0") or "0"
+        m = re.match(r"^(.*)[.,]([0-9]{2})$", n)
+        dollars, cents = (m.group(1), m.group(2)) if m else (n, "00")
+        v = str(int(re.sub(r"[^0-9]", "", dollars) or "0") * 100 + int(cents))
+        if (len(v), v) > (len(best), best):
+            best = v
+    return best
 
 
 def compare(approved_read, executed_read, approved_hashes, executed_hashes):
@@ -118,9 +121,9 @@ def sign(receipt, seed):
     return receipt
 
 
-def build(policy, action_text, amount_cop, address_text,
+def build(policy, action_text, amount_cents, address_text,
           approved_crops, executed_crops, approval, seed,
-          receipt_id=None, time=None, agent="wonder@marta-shop",
+          receipt_id=None, time=None, agent="wonder@larkspur-market",
           signed_by=None, approved_read=None, executed_read=None,
           executed_hashes=None, status=CONFIRMED, blocked_at=None):
     """Assemble and sign a receipt.
@@ -140,7 +143,7 @@ def build(policy, action_text, amount_cop, address_text,
         "time": time or clock.iso(),
         "agent": agent,
         "action": action_text,
-        "amount_cop": amount_cop,
+        "amount_cents": amount_cents,
         "address": address_text,
         "policy_sha256": policy.sha256(),
         "approved": approved,

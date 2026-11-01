@@ -50,7 +50,7 @@ TYPES = frozenset({
 
 
 def _ts(ts=None):
-    # RFC3339 with the demo's fixed -05:00 (Bogotá) offset.
+    # RFC3339 with the demo's fixed -05:00 offset.
     if ts:
         return ts
     return time.strftime("%Y-%m-%dT%H:%M:%S-05:00", time.localtime())
@@ -86,11 +86,11 @@ def check_result(frame, status, regions, code_only_text, pixels_only_text,
     }
 
 
-def approval_requested(frame, amount_cop, address_text,
+def approval_requested(frame, amount_cents, address_text,
                        crop_amount_sha, crop_address_sha, images=None, ts=None):
     e = {
         "type": "approval.requested", "frame": frame, "ts": _ts(ts),
-        "amount_cop": amount_cop,
+        "amount_cents": amount_cents,
         "address": address_text,
         "crops": {"amount": crop_amount_sha, "address": crop_address_sha},
     }
@@ -139,12 +139,12 @@ def receipt_signed(receipt_id, signature, path=None, ts=None):
     return e
 
 
-def order_confirmed(frame, address_text, amount_cop, ts=None):
+def order_confirmed(frame, address_text, amount_cents, ts=None):
     """The order the portal recorded as confirmed, and where it is delivered.
     Emitted in both modes, so view 3 can show the order that went through
     without a supervisor."""
     return {"type": "order.confirmed", "frame": frame, "ts": _ts(ts),
-            "address": address_text, "amount_cop": amount_cop}
+            "address": address_text, "amount_cents": amount_cents}
 
 
 def region(label, box, text, confidence):

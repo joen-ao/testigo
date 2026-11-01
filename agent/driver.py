@@ -17,8 +17,8 @@ from urllib.parse import urlsplit
 
 from common import clock, config
 from interceptor.channels import Capture
-# The simulated delivery addresses (the shop's, the attacker's storeroom).
-from portal.scenarios import ATTACKER_ADDRESS, SHOP_ADDRESS  # noqa: F401
+# The simulated delivery addresses (the buyer's, the attacker's storeroom).
+from portal.scenarios import ATTACKER_ADDRESS, BUYER_ADDRESS  # noqa: F401
 
 SETTLE_MS = 400   # after an action, let the page react before the next capture
 

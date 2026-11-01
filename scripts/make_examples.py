@@ -5,13 +5,13 @@
 Writes:
   examples/clean/   every check passes
   examples/a3/      correctly signed, but the address that executed
-                    (Carrera 80 # 7-15) differs from the approved one
-                    (Calle 45 # 12-30): verify fails at step 4
+                    (88 Mill Street) differs from the approved one
+                    (120 Harbor Road, Unit 4): verify fails at step 4
   examples/pubkey.txt
 
 The receipts are signed with an Ed25519 key generated in memory and dropped
 when the script exits; only its public half is written. They reference the
-committed policy (policy/marta.policy.yaml), which `testigo verify` trusts by
+committed policy (policy/larkspur.policy.yaml), which `testigo verify` trusts by
 its hash, so they verify from a fresh clone. The "crop" files are placeholder
 bytes, not screenshots. Signatures, ids and times change on every run; the
 shape and the verdicts do not.
@@ -24,16 +24,17 @@ import shutil
 from pathlib import Path
 
 from common.config import POLICY_PATH, ROOT
+from common.money import usd
 from interceptor.policy import load as load_policy
 from receipts import keys
 from receipts.bundle import sign_order
 from receipts.receipt import CROP_NAMES
 
 OUT = ROOT / "examples"
-AMOUNT = 120000
-SHOP = "Tienda Doña Marta · Calle 45 # 12-30, Bogotá"
-OTHER = "Bodega Norte · Carrera 80 # 7-15, Bogotá"
-TRANSCRIPT = "ciento veinte mil pesos, entrega en Tienda Doña Marta"
+AMOUNT = 124000
+BUYER = "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"
+OTHER = "Dock 9 Storage · 88 Mill Street, Riverton"
+TRANSCRIPT = "Twelve hundred forty dollars, ship to Larkspur Market"
 
 
 def placeholder(name, value):
@@ -42,7 +43,7 @@ def placeholder(name, value):
 
 
 def crops(address):
-    return {"amount": placeholder("amount", "COP %d" % AMOUNT),
+    return {"amount": placeholder("amount", usd(AMOUNT)),
             "address": placeholder("address", address)}
 
 
@@ -50,16 +51,16 @@ def make(out=OUT, policy_path=POLICY_PATH):
     out = Path(out)
     policy = load_policy(policy_path)
     seed = keys.generate_seed()       # in memory only; never written
-    event = {"amount_cop": AMOUNT, "address": SHOP}
+    event = {"amount_cents": AMOUNT, "address": BUYER}
     approval = {"method": "passkey", "voice_transcript": TRANSCRIPT, "voice_match": True}
-    for scenario, executed_address in (("clean", SHOP), ("a3", OTHER)):
+    for scenario, executed_address in (("clean", BUYER), ("a3", OTHER)):
         folder = out / scenario
         if folder.exists():
             shutil.rmtree(folder)
-        sign_order(policy, event, approval, crops(SHOP), seed,
+        sign_order(policy, event, approval, crops(BUYER), seed,
                    executed_crops=crops(executed_address),
-                   executed_read={"amount": str(AMOUNT), "address": executed_address},
-                   run_dir=folder, agent="wonder@marta-shop")
+                   executed_read={"amount": usd(AMOUNT), "address": executed_address},
+                   run_dir=folder, agent="wonder@larkspur-market")
     (out / "pubkey.txt").write_text(keys.public_from_seed(seed).hex() + "\n", encoding="utf-8")
     del seed
     return out

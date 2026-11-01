@@ -4,7 +4,9 @@
 
 Concreta la fila F4 del spec general: el canal independiente que mira la pantalla como lo haría una persona. Marca el monto, la dirección de entrega y el botón en la captura, lee su contenido, y lee el texto de toda la captura. Es el aporte técnico principal: no confía en el código de la página, solo en los píxeles. Si algo aquí contradice a `00-spec-general.md` o `01-spec-construccion.md`, mandan esos. Todo es simulación; SAM y Spark son reales.
 
-> **1 nov (R2):** la región protegida antes era la cuenta de un pago; ahora es la dirección de entrega («Deliver to», etiqueta `address`). El canal no cambia de forma (`03-revision-31-oct.md` §10).
+> **1 nov (R2):** la región protegida antes era la cuenta de un pago; ahora es la dirección de entrega («Ship to», etiqueta `address`). El canal no cambia de forma (`03-revision-31-oct.md` §10).
+
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
 
 ## Decisiones
 

@@ -8,7 +8,7 @@ import unittest
 from types import SimpleNamespace as NS
 
 from agent.agent import Agent, WonderAgent, parse_action
-from agent.driver import BrowserDriver, SHOP_ADDRESS, _key
+from agent.driver import BrowserDriver, BUYER_ADDRESS, _key
 from agent.loop import MAX_STEPS, run
 from interceptor.channels import Capture
 from interceptor.sensitive import SamButtons
@@ -45,7 +45,7 @@ class StepDriver(BrowserDriver):
     def execute(self, action):
         self.ran.append(action["kind"])
         if action["kind"] == "click" and 754 <= action["x"] <= 923 and 700 <= action["y"] <= 747:
-            self._order = {"address": SHOP_ADDRESS, "amount_cop": 120000}
+            self._order = {"address": BUYER_ADDRESS, "amount_cents": 124000}
 
     def observe_after(self):
         return self.observe()
@@ -85,7 +85,7 @@ class LoopTests(unittest.TestCase):
         out = run(drv, agent, supervised=False)
         self.assertEqual(drv.ran, ["click", "type", "click"])
         self.assertEqual(out.actions, 3)
-        self.assertEqual(out.order["address"], SHOP_ADDRESS)
+        self.assertEqual(out.order["address"], BUYER_ADDRESS)
         self.assertEqual(agent.results, ["executed"] * 3)
 
     def test_done_ends_the_run_without_executing(self):
@@ -151,7 +151,7 @@ class SensitiveTests(unittest.TestCase):
     def test_submit_keys_and_newlines_are_sensitive(self):
         cls = SamButtons(sam({}))
         self.assertTrue(cls({"kind": "keypress", "keys": ["Enter"]}, self.cap)[0])
-        self.assertTrue(cls({"kind": "type", "text": "Carrera 80 # 7-15\n"}, self.cap)[0])
+        self.assertTrue(cls({"kind": "type", "text": "88 Mill Street\n"}, self.cap)[0])
         self.assertFalse(cls({"kind": "keypress", "keys": ["End"]}, self.cap)[0])
         self.assertTrue(cls({"kind": "keypress", "keys": ["Control+Enter"]}, self.cap)[0])
         self.assertTrue(cls({"kind": "keypress", "keys": ["NumpadEnter"]}, self.cap)[0])
@@ -190,7 +190,7 @@ class ParseActionTests(unittest.TestCase):
         self.assertEqual(a["kind"], "invalid")
 
     def test_other_tools(self):
-        out = parse_action(NS(output=[fn_call("type_text", {"text": "Calle 45"}, "a"),
+        out = parse_action(NS(output=[fn_call("type_text", {"text": "120 Harbor"}, "a"),
                                       fn_call("keypress", {"keys": ["Control+A"]}, "b"),
                                       fn_call("scroll", {"x": 5, "y": 5, "dy": 300}, "c"),
                                       fn_call("done", {"summary": "confirmed"}, "d")]))

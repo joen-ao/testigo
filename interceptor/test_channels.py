@@ -26,14 +26,14 @@ def png(w=1280, h=800, color=(255, 255, 255)):
     return buf.getvalue()
 
 
-SCREEN = {"lines": ["Total", "COP 120,000", "Tienda Doña Marta - Calle 45 # 12-30, Bogotá"],
-          "amount": {"text": "COP 120,000", "box": [28, 703, 196, 743]},
-          "address": {"text": "Calle 45 # 12-30, Bogotá Tienda Doña Marta",
+SCREEN = {"lines": ["Total", "USD 1,240.00", "Larkspur Market - 120 Harbor Road, Unit 4, Riverton"],
+          "amount": {"text": "USD 1,240.00", "box": [28, 703, 196, 743]},
+          "address": {"text": "120 Harbor Road, Unit 4, Riverton Larkspur Market",
                       "box": [27, 320, 405, 356]}}
 
 
 class FakeMeta:
-    def __init__(self, screen=SCREEN, crop_text="COP 120,000", boxes=True):
+    def __init__(self, screen=SCREEN, crop_text="USD 1,240.00", boxes=True):
         self.screen, self.crop_text, self.boxes = screen, crop_text, boxes
         self.prompts = []
 
@@ -95,10 +95,10 @@ class ChannelTests(unittest.TestCase):
         cap = self.cap()
         regions = {r["label"]: r for r in SamSparkChannel(FakeMeta()).read_regions(cap)}
         self.assertEqual(set(regions), {"amount", "address", "confirm button"})
-        self.assertEqual(regions["amount"]["text"], "COP 120,000")
+        self.assertEqual(regions["amount"]["text"], "USD 1,240.00")
         self.assertAlmostEqual(regions["amount"]["confidence"], 0.88)
         self.assertEqual(set(cap.crops), {"amount", "address"})
-        self.assertIn("COP 120,000", cap.rendered_lines)
+        self.assertIn("USD 1,240.00", cap.rendered_lines)
         self.assertEqual(cap.rendered_lines.count("a tile line"), 4)
 
     def test_never_puts_page_text_in_the_prompt(self):
@@ -121,7 +121,7 @@ class ChannelTests(unittest.TestCase):
     def test_crop_that_disagrees_with_the_first_read_gives_no_confidence(self):
         cap = self.cap()
         regions = {r["label"]: r for r in
-                   SamSparkChannel(FakeMeta(crop_text="COP 900,000")).read_regions(cap)}
+                   SamSparkChannel(FakeMeta(crop_text="USD 9,000.00")).read_regions(cap)}
         self.assertEqual(regions["amount"]["confidence"], 0.0)
 
     def test_api_errors_are_recorded(self):

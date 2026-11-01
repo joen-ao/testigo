@@ -23,13 +23,13 @@ from approval.desk import MAX_VOICE_ATTEMPTS, ApprovalDesk, DeskError
 from interceptor import events as ev
 from interceptor import service
 
-GOOD = "ciento veinte mil pesos, entrega en Tienda Doña Marta"
-WRONG = "ciento cincuenta mil pesos, entrega en Tienda Doña Marta"
+GOOD = "Twelve hundred forty dollars, ship to Larkspur Market"
+WRONG = "fifteen hundred dollars, ship to Larkspur Market"
 SAME = {"Origin": "http://testserver"}          # the interface page itself
 
 
 def approval_event():
-    return ev.approval_requested(5, 120000, "Tienda Doña Marta · Calle 45 # 12-30, Bogotá",
+    return ev.approval_requested(5, 124000, "Larkspur Market · 120 Harbor Road, Unit 4, Riverton",
                                  "a" * 64, "b" * 64, ts="2026-10-31T10:00:00-05:00")
 
 
@@ -94,9 +94,9 @@ class DeskTests(unittest.TestCase):
 
     def test_open_needs_an_integer_amount(self):
         d = ApprovalDesk()
-        for amount in (120000.0, "120000", True, None):
+        for amount in (124000.0, "124000", True, None):
             with self.assertRaises(DeskError) as e:
-                d.open(dict(approval_event(), amount_cop=amount))
+                d.open(dict(approval_event(), amount_cents=amount))
             self.assertEqual(e.exception.status, 422, amount)
         self.assertIsNone(d.current())
 
@@ -104,17 +104,17 @@ class DeskTests(unittest.TestCase):
         d = ApprovalDesk()
         rec = d.open(approval_event())
         d.start_voice(rec["id"])
-        v = d.record_voice(rec["id"], "no confirmes " + GOOD)["voice"]
+        v = d.record_voice(rec["id"], "do not confirm " + GOOD)["voice"]
         self.assertFalse(v["match"])
-        self.assertEqual(v["negated"], ["no"])
+        self.assertEqual(v["negated"], ["not"])
         d.start_voice(rec["id"])
-        v = d.record_voice(rec["id"], "cinco mil, ciento quince mil, entrega en Tienda Doña Marta")["voice"]
+        v = d.record_voice(rec["id"], "five dollars, then twelve hundred thirty five, ship to Larkspur Market")["voice"]
         self.assertFalse(v["amount_match"])
         self.assertIsNone(v["heard_amount"])
         self.assertTrue(v["amount_reason"])
-        big = d.open(dict(approval_event(), amount_cop=2_000_000_000))
+        big = d.open(dict(approval_event(), amount_cents=200_000_000_000))
         d.start_voice(big["id"])
-        v = d.record_voice(big["id"], "dos mil millones, entrega en Tienda Doña Marta")["voice"]
+        v = d.record_voice(big["id"], "two billion dollars, ship to Larkspur Market")["voice"]
         self.assertIn("out of range", v["amount_reason"])
 
     def test_voice_attempts_are_capped(self):
@@ -232,9 +232,9 @@ class ApprovalServiceTests(unittest.TestCase):
                           (404, 422), images)
 
     def test_open_refuses_a_non_integer_amount(self):
-        for amount in (120000.5, 120000.0):
+        for amount in (124000.5, 124000.0):
             r = self.c.post("/api/approval/open",
-                            json={"event": dict(approval_event(), amount_cop=amount)})
+                            json={"event": dict(approval_event(), amount_cents=amount)})
             self.assertEqual(r.status_code, 422, amount)
             self.assertIn("integer", r.json()["detail"])
         self.assertIsNone(self.c.get("/api/approval").json()["approval"])
@@ -333,7 +333,7 @@ class ServiceApproverTests(unittest.TestCase):
 
     def test_decision_for_another_event_or_without_match_is_a_denial(self):
         a = ServiceApprover(http=lambda *a: None, sleep=lambda s: None)
-        other = dict(approval_event(), amount_cop=999)
+        other = dict(approval_event(), amount_cents=999)
         rec = {"id": "a1", "decision": "approve", "event": other,
                "voice": {"match": True, "transcript": GOOD}}
         self.assertFalse(a._result(approval_event(), rec, "a1")[0])
@@ -356,7 +356,7 @@ class ServiceApproverTests(unittest.TestCase):
         """A service that says match for a transcript that does not match the
         event (a bug, or a tampered record) is not trusted."""
         a = ServiceApprover(http=lambda *a: None, sleep=lambda s: None)
-        for said in (WRONG, "no confirmes " + GOOD, "cinco mil, ciento quince mil, entrega en Tienda Doña Marta"):
+        for said in (WRONG, "don't confirm " + GOOD, "five dollars, then twelve hundred thirty five, Larkspur Market"):
             rec = {"id": "a1", "decision": "approve", "event": approval_event(),
                    "voice": {"match": True, "transcript": said}}
             granted, info = a._result(approval_event(), rec, "a1")
@@ -397,7 +397,7 @@ class RunWiringTests(unittest.TestCase):
         cf = CropFiles(Channel(), self.tmp / "run1")
         (self.tmp / "run1").mkdir()
         self.assertEqual(cf.read_regions(capture), ["regions"])
-        e = ev.approval_requested(5, 120000, "Tienda Doña Marta", sha_crop(b"\x89PNG amount"),
+        e = ev.approval_requested(5, 124000, "Larkspur Market", sha_crop(b"\x89PNG amount"),
                                   sha_crop(b"\x89PNG address"))
         images = cf.images_for(e)
         self.assertEqual(set(images), {"amount", "address"})

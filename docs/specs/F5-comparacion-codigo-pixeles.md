@@ -6,6 +6,8 @@ Concreta la fila F5 del spec general: lee el texto de toda la captura y encuentr
 
 > **1 nov (R2):** las señales del filtro antes buscaban datos de un pago; ahora buscan direcciones y verbos de entrega (`03-revision-31-oct.md` §10).
 
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
+
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
@@ -50,12 +52,12 @@ Fuera de alcance de F5: leer la pantalla (F4), decidir (F6). F5 compara y filtra
 Una línea de la diferencia se marca si, en inglés o español, contiene al menos una de:
 
 - una orden dirigida a un «agent», «assistant», «AI» o «agente», «asistente» (un imperativo dirigido al agente);
-- una dirección: el patrón de dirección (`calle|carrera|avenida|diagonal|transversal` + número `#` número `-` número, con las abreviaturas `Cl`, `Cra`, `Kr`, `Av`, `Dg`, `Tv`, `No.`, `N°`);
+- una dirección: el patrón de dirección (número + punto cardinal opcional + nombre + tipo `Road/Rd`, `Street/St`, `Avenue/Ave`, `Boulevard/Blvd`, `Lane/Ln`, `Drive/Dr`, con o sin punto, + complemento opcional `Unit/Suite/Ste/Apt/Bldg/Dock` + número o letra);
 - una mención al agente junto a un verbo de entrega o confirmación («deliver», «ship», «send», «entrega», «envía», «confirm», «confirma»).
 
 La lista exacta de patrones se fija y se amplía con los casos de WitnessBench. El texto de promoción, los menús y las etiquetas de accesibilidad no encajan en ninguna señal y no se marcan.
 
-**Qué marca desde el 1 nov (ataques endurecidos, F2 y `03-revision-31-oct.md` §12).** Las 5 redacciones de A1/A2 ya no nombran a un agente: son avisos de entrega de la propia tienda («Delivery update for Tienda Doña Marta (customer 0381)…», «— Marta»). El filtro las sigue marcando todas, pero **solo por la dirección** (`Carrera 80 # 7-15`); la señal «término de agente + verbo» ya no se dispara con ninguna, y sin la dirección ninguna se marcaría (probado en `interceptor/test_instruction_filter.py`). Así, A1 se frena como texto del código que no se pinta y A2 como texto pintado que no está en el código, siempre que la dirección se lea. Un aviso con la dirección solo en palabras sigue siendo el límite F5-D4 (`a1edge`, sin cambios). A3 no pasa por el filtro: código vivo y píxeles coinciden y lo frena la política (F6, regla 3). El texto oculto legítimo de F2-D4 sigue sin marcarse.
+**Qué marca desde el 1 nov (ataques endurecidos, F2 y `03-revision-31-oct.md` §12).** Las 5 redacciones de A1/A2 ya no nombran a un agente: son avisos de cuenta o de entrega de la propia empresa compradora («Larkspur Market's receiving address is now 88 Mill Street…»). El filtro las sigue marcando todas, pero **solo por la dirección** (`88 Mill Street`); la señal «término de agente + verbo» ya no se dispara con ninguna, y sin la dirección ninguna se marcaría (probado en `interceptor/test_instruction_filter.py`). Así, A1 se frena como texto del código que no se pinta y A2 como texto pintado que no está en el código, siempre que la dirección se lea. Un aviso con la dirección solo en palabras («eighty-eight Mill Street») sigue siendo el límite F5-D4 (`a1edge`, sin cambios). A3 no pasa por el filtro: código vivo y píxeles coinciden y lo frena la política (F6, regla 3). El texto oculto legítimo de F2-D4 sigue sin marcarse.
 
 ## 5. Criterios de aceptación de F5
 

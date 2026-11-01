@@ -280,6 +280,7 @@ def main(argv=None):
             httpd.shutdown()
 
     result = {"generated": clock.iso(), "model": meta.model("wonder"), "tag": args.tag,
+              "scenario": config.SCENARIO,
               "policy_sha256": pol_sha, "policy": config.runs_label(pol_path),
               **completeness(rows), "summary": summarize(rows), "rows": rows}
     results_path = (s.runs_dir / "bench_results.json" if args.tag == "full"

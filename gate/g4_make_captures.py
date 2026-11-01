@@ -11,7 +11,7 @@ Takes, with Playwright on the running portal (1280x800, scale 1):
 The reference boxes come from the portal's data-testid elements, as painted
 (a button or bordered field whole, text by its extent). That is allowed here because it is MEASUREMENT, after the
 fact: the pixel channel never sees them. The address's box covers the
-"Deliver to" field and the name next to it, as the channel is asked to read both.
+"Ship to" field and the name next to it, as the channel is asked to read both.
 
 Writes runs/gate/<date>/g4/captures/<name>.png and truth.json. --limit takes
 only the first N captures (order pages first).
@@ -50,7 +50,7 @@ def union(boxes):
 # Where the element is painted, in CSS px (= screenshot px at scale 1): a button
 # or a bordered text field is its whole box (both are visible shapes); a
 # borderless field (the review screen's) is its text; any other element is the
-# extent of its text (a full-width <div> around "COP 120,000" is not the amount).
+# extent of its text (a full-width <div> around "USD 1,240.00" is not the amount).
 _BOX_JS = """el => {
   const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
   const box = (x1, y1, x2, y2) => [x1, y1, x2, y2].map(Math.round);

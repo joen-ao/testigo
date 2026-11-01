@@ -101,8 +101,8 @@ class Interceptor:
 
         # Rule 3: policy violation (address/amount read from pixels)
         address_text = by_label["address"]["text"]
-        amount_cop = _amount_from(by_label["amount"]["text"])
-        ok, why = self.policy.check_order(address_text, amount_cop)
+        amount_cents = _amount_from(by_label["amount"]["text"])
+        ok, why = self.policy.check_order(address_text, amount_cents)
         if not ok:
             return Decision(
                 ev.POLICY_VIOLATION, True,
@@ -116,7 +116,7 @@ class Interceptor:
             crop_amt = sha_crop(capture.crops.get("amount", b""))
             crop_rec = sha_crop(capture.crops.get("address", b""))
             approval = ev.approval_requested(
-                capture.frame, amount_cop, address_text, crop_amt, crop_rec)
+                capture.frame, amount_cents, address_text, crop_amt, crop_rec)
             return Decision(ev.OK, False, check_ev, approval_event=approval,
                             needs_approval=True)
         return Decision(ev.OK, False, check_ev)
@@ -255,8 +255,10 @@ def _dedupe(xs):
 
 
 def _amount_from(text):
-    digits = re.sub(r"[^\d]", "", text or "")
-    return int(digits) if digits else 0
+    """The amount read from the pixels, in integer cents ("USD 1,240.00" -> 124000)."""
+    from receipts.receipt import norm_read
+    cents = norm_read("amount", text or "")
+    return int(cents) if cents else 0
 
 
 def _is_confirm(action):

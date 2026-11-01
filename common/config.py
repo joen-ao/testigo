@@ -14,16 +14,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # The committed demo policy. Never overwritten by the interface: a mandate
 # recorded and signed live (view 1) goes to ACTIVE_POLICY under RUNS_DIR.
-POLICY_PATH = ROOT / "policy" / "marta.policy.yaml"
+POLICY_PATH = ROOT / "policy" / "larkspur.policy.yaml"
 ACTIVE_POLICY = Path("policy") / "active.policy.yaml"     # relative to RUNS_DIR (git-ignored)
 
-# The shop's profile (simulated, R2): where Marta's supplier orders are
-# delivered. The mandate names the shop ("la tienda", "Tienda Doña Marta") but
-# never dictates its address; policy.compile binds the name to this address
-# (F1-D2), and the portal starts every order with it.
-SHOP = {
-    "name": "Tienda Doña Marta",
-    "address": "Calle 45 # 12-30, Bogotá",
+# The buyer's profile (simulated; global scenario, 04): where the company's
+# supplier orders are delivered. The mandate names the destination ("our
+# warehouse", "Larkspur Market") but never dictates its address;
+# policy.compile binds the name to this address (F1-D2), and the portal starts
+# every order with it.
+# The scenario every result is measured in (docs/specs/04-escenario-global.md).
+# WitnessBench writes it into its results; a results file without it (or with
+# another one) is from an earlier scenario and is shown as history, never as
+# the current numbers.
+SCENARIO = "global-larkspur"
+
+BUYER = {
+    "name": "Larkspur Market",
+    "address": "120 Harbor Road, Unit 4, Riverton",
     "simulated": True,
 }
 
@@ -191,7 +198,7 @@ def policy_path():
     """The policy every consumer enforces and shows: the service (/api/policy,
     /status), the loop, the bench and `testigo verify`. The one signed live from
     the interface when present (RUNS_DIR/policy/active.policy.yaml), else the
-    committed policy/marta.policy.yaml.
+    committed policy/larkspur.policy.yaml.
 
     The active policy is used only if its stored hash matches and it is signed
     by the owner's key; otherwise PolicyNotTrusted (fail closed, never the

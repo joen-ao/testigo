@@ -1,20 +1,21 @@
 """Gate g1: a real call to each Meta model from this machine (F0 §13, R5).
 
-  .venv/bin/python -m gate.g1_api_bogota [--audio clip.wav]
+  .venv/bin/python -m gate.g1_api [--audio clip.wav]
 
 Checks, each against the real API through common.meta_client:
   models  the four configured model ids are listed by the API
   spark   Spark 1.3 reads the total from a screenshot of the portal
   wonder  Wonder 1.0 answers the same question
   sam     SAM 3.1 returns a box for "confirm button" on that screenshot
-  voice   Voice Transcribe hears the amount in a Spanish WAV clip
+  voice   Voice Transcribe hears the amount in an English WAV clip
 It also records, without failing, whether each model accepts the `computer`
 tool (computer use), which decides how F3 drives the browser.
 
-Without --audio the clip is synthesized with macOS `say`; elsewhere voice is
-marked "omitted". Spend is a few cents. The raw answers go to
-runs/gate/<date>/g1/. That the call came from Bogotá, and that the credits were
-claimed, is confirmed by a person (manual items of the gate).
+Without --audio the clip is synthesized with macOS `say` and an English voice
+(gate/voices.py: Samantha, Alex or Daniel, else the system default);
+elsewhere voice is marked "omitted". Spend is a few cents. The raw answers go
+to runs/gate/<date>/g1/. That the call came from the team's machine, and that
+the credits were claimed, is confirmed by a person (manual items of the gate).
 """
 
 import argparse
@@ -26,10 +27,12 @@ import threading
 from http.server import ThreadingHTTPServer
 
 from common import meta_client
+from approval.voice_match import words_to_int
 from gate.report import report, run_dir
+from gate.voices import english_voice, say_args
 
-TOTAL = "120,000"
-SPOKEN = "ciento veinte mil pesos, entrega en Tienda Doña Marta"
+TOTAL = "1,240.00"
+SPOKEN = "Twelve hundred forty dollars, ship to Larkspur Market"
 
 
 def portal_screenshot(path):
@@ -43,7 +46,7 @@ def portal_screenshot(path):
             browser = p.chromium.launch()
             page = browser.new_page(viewport={"width": 1280, "height": 800})
             page.goto("http://127.0.0.1:%d/orders/new?scenario=clean&variant=1" % httpd.server_port)
-            # the cart starts empty (COP 0) since F2's add-items step; fill it first
+            # the cart starts empty (USD 0.00) since F2's add-items step; fill it first
             page.click('[data-testid="add-items"]')
             page.wait_for_selector('[data-testid="items-added"]')
             page.screenshot(path=str(path))
@@ -57,13 +60,13 @@ def synth_clip(out_dir):
     if not (shutil.which("say") and shutil.which("afconvert")):
         return None
     aiff, wav = out_dir / "voice.aiff", out_dir / "voice.wav"
-    subprocess.run(["say", "-v", "Paulina", "-o", str(aiff), SPOKEN], check=True)
+    subprocess.run(say_args(english_voice()) + ["-o", str(aiff), SPOKEN], check=True)
     subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@16000", str(aiff), str(wav)], check=True)
     return wav
 
 
 def norm(s):
-    return re.sub(r"[^0-9a-záéíóúñ ]", "", (s or "").lower())
+    return re.sub(r"[^0-9a-z ]", "", (s or "").lower())
 
 
 def check(results, name, fn):
@@ -89,7 +92,7 @@ def computer_tool(meta, tool, png):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--audio", help="a Spanish WAV clip saying: " + SPOKEN)
+    ap.add_argument("--audio", help="an English WAV clip saying: " + SPOKEN)
     args = ap.parse_args(argv)
 
     out = run_dir("g1")
@@ -136,7 +139,8 @@ def main(argv=None):
         def voice():
             text, ms, secs = meta.transcribe(clip)
             raw["voice"] = text
-            return "ciento veinte mil" in norm(text), "%r, %.1f s of audio in %d ms" % (text, secs, ms)
+            heard = words_to_int(text.split(",")[0])
+            return heard == 1240, "%r, %.1f s of audio in %d ms" % (text, secs, ms)
         check(results, "voice", voice)
     else:
         results["voice"] = {"pass": None, "detail": "omitted: no clip (pass --audio)"}
@@ -149,7 +153,7 @@ def main(argv=None):
     passed = sum(1 for r in required if r)
     details = dict(results, computer_tool=raw["computer_tool"],
                    spent_usd_total=round(meta.spent_usd(), 4),
-                   manual="confirm the call was made from Bogotá and the credits were claimed")
+                   manual="confirm the call was made from the team's machine and the credits were claimed")
     return report("g1", bool(required) and passed == len(required),
                   "%d/%d checks passed" % (passed, len(required)),
                   "%d/%d" % (len(required), len(required)), len(required), details)

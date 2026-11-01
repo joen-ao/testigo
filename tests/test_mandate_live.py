@@ -49,11 +49,11 @@ class Isolated(unittest.TestCase):
         # whatever happened, the committed demo policy is byte for byte the same
         self.assertEqual(committed_sha(), self.committed)
 
-    def write_active(self, max_cop=90000):
+    def write_active(self, max_cents=90000):
         from policy.compile import build_policy_dict, sign_policy_dict, write_policy
-        d = build_policy_dict(PHRASE, [{"name": "Tienda Doña Marta",
-                                        "address": "Calle 45 # 12-30, Bogotá"}],
-                              max_cop, "new_address", signed_by="owner-key:marta")
+        d = build_policy_dict(PHRASE, [{"name": "Larkspur Market",
+                                        "address": "120 Harbor Road, Unit 4, Riverton"}],
+                              max_cents, "new_address", signed_by="owner-key:larkspur")
         signed, p = sign_policy_dict(d, self.seed)
         write_policy(signed, config.active_policy_path())
         return p
@@ -69,7 +69,7 @@ class ResolutionTests(Isolated):
     def test_loop_and_verify_use_the_active_policy(self):
         from receipts.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
-        p = self.write_active(max_cop=150000)
+        p = self.write_active(max_cents=150000)
         out = run_fixture("clean", supervised=True, run_dir=self.tmp / "r1")
         self.assertEqual(out.receipt["policy_sha256"], p.sha256())
         res = verify_receipt(str(out.receipt_path), evidence_dir=str(self.tmp / "r1"))
@@ -81,7 +81,7 @@ class ResolutionTests(Isolated):
 
     def test_the_active_policy_is_enforced(self):
         from tests.fixtures.fake_agent import run_fixture
-        self.write_active(max_cop=90000)              # below the order's COP 120,000
+        self.write_active(max_cents=90000)              # below the order's USD 1,240.00
         out = run_fixture("clean", supervised=True)
         self.assertTrue(out.blocked)
         check = [e for e in out.events if e["type"] == "check.result"][-1]
@@ -103,8 +103,8 @@ class PolicyTrustTests(Isolated):
 
     def unsigned_active(self, **rules):
         from policy.compile import build_policy_dict, write_policy
-        d = build_policy_dict(PHRASE, [{"name": "Bodega X", "address": "Carrera 80 # 7-15, Bogotá"}],
-                              99_000_000, "new_address", signed_by="owner-key:marta")
+        d = build_policy_dict(PHRASE, [{"name": "Bodega X", "address": "88 Mill Street, Riverton"}],
+                              99_000_000, "new_address", signed_by="owner-key:larkspur")
         d.update(rules)
         write_policy(d, config.active_policy_path())
 
@@ -112,11 +112,11 @@ class PolicyTrustTests(Isolated):
         from receipts.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
         r0 = run_fixture("clean", supervised=True, run_dir=self.tmp / "r0")      # committed policy
-        p1 = self.write_active(max_cop=150000)
+        p1 = self.write_active(max_cents=150000)
         config.policy_path()                                                      # archived on use
         r1 = run_fixture("clean", supervised=True, run_dir=self.tmp / "r1")      # policy 1
         self.assertEqual(r1.receipt["policy_sha256"], p1.sha256())
-        p2 = self.write_active(max_cop=140000)                                    # a new mandate
+        p2 = self.write_active(max_cents=140000)                                    # a new mandate
         self.assertNotEqual(p1.sha256(), p2.sha256())
         for out, d in ((r0, "r0"), (r1, "r1")):
             res = verify_receipt(str(out.receipt_path), evidence_dir=str(self.tmp / d))
@@ -134,12 +134,12 @@ class PolicyTrustTests(Isolated):
         from receipts.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
         from agent import loop
-        p1 = self.write_active(max_cop=150000)
+        p1 = self.write_active(max_cents=150000)
         real = loop.load_policy
 
         def sign_meanwhile(path):
             pol = real(path)                       # the loop has its policy ...
-            self.write_active(max_cop=130000)      # ... and the owner signs a new one
+            self.write_active(max_cents=130000)      # ... and the owner signs a new one
             return pol
         with mock.patch.object(loop, "load_policy", sign_meanwhile):
             out = run_fixture("clean", supervised=True, run_dir=self.tmp / "r")
@@ -151,7 +151,7 @@ class PolicyTrustTests(Isolated):
     def test_archived_policy_must_be_the_owners(self):
         from receipts.verify import verify_receipt
         from tests.fixtures.fake_agent import run_fixture
-        self.write_active(max_cop=150000)
+        self.write_active(max_cents=150000)
         out = run_fixture("clean", supervised=True, run_dir=self.tmp / "r")
         sha = out.receipt["policy_sha256"]
         # another key on this machine: the archived policy is not the owner's
@@ -181,12 +181,12 @@ class PolicyTrustTests(Isolated):
 
     def test_tampered_or_foreign_active_policy_is_refused(self):
         import yaml
-        p = self.write_active(max_cop=150000)
+        p = self.write_active(max_cents=150000)
         path = config.active_policy_path()
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         # 1. rules changed after signing (hash no longer matches)
-        data["rules"] = [{"deliver_only": [{"name": "Bodega X", "address": "Carrera 80 # 7-15"}]},
-                         {"max_per_order_cop": 99_000_000}]
+        data["rules"] = [{"deliver_only": [{"name": "Bodega X", "address": "88 Mill Street"}]},
+                         {"max_per_order_cents": 99_000_000}]
         path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
         with self.assertRaisesRegex(config.PolicyNotTrusted, "sha256"):
             config.policy_path()
@@ -199,7 +199,7 @@ class PolicyTrustTests(Isolated):
         with self.assertRaisesRegex(config.PolicyNotTrusted, "owner"):
             config.policy_path()
         # 3. a genuine one, but no owner key on this machine to check it
-        self.write_active(max_cop=150000)
+        self.write_active(max_cents=150000)
         self.key.unlink()
         with self.assertRaisesRegex(config.PolicyNotTrusted, "no owner key"):
             config.policy_path()
@@ -216,7 +216,7 @@ class BenchPolicyTests(Isolated):
         def fake_one_run(meta, sc, v, m, out, steps, policy_path=None, policy_sha256=None):
             seen.append((policy_path, policy_sha256))
             if sign_between:
-                self.write_active(max_cop=100000 + len(seen))
+                self.write_active(max_cents=100000 + len(seen))
             return {"scenario": sc, "variant": v, "mode": m, "policy_sha256": policy_sha256}
 
         class Meta:
@@ -231,7 +231,7 @@ class BenchPolicyTests(Isolated):
 
     def test_one_policy_for_the_whole_bench(self):
         import json
-        p = self.write_active(max_cop=150000)
+        p = self.write_active(max_cents=150000)
         code, seen = self.run_bench(self.tmp / "b", sign_between=True)
         self.assertEqual(code, 0)
         self.assertEqual(len(seen), 2)
@@ -242,10 +242,10 @@ class BenchPolicyTests(Isolated):
         self.assertEqual({r["policy_sha256"] for r in result["rows"]}, {p.sha256()})
 
     def test_resume_under_another_policy_is_refused(self):
-        self.write_active(max_cop=150000)
+        self.write_active(max_cents=150000)
         code, _ = self.run_bench(self.tmp / "b", extra=("--variants", "1"))
         self.assertEqual(code, 0)
-        self.write_active(max_cop=140000)
+        self.write_active(max_cents=140000)
         code, seen = self.run_bench(self.tmp / "b", extra=("--resume",))
         self.assertEqual(code, 2)
         self.assertEqual(seen, [])
@@ -278,9 +278,9 @@ class MandateServiceTests(Isolated):
         d = r.json()
         self.assertEqual(d["status"], "draft")
         self.assertEqual(d["transcript"], PHRASE)
-        self.assertEqual(d["deliver_only"], [{"name": "Tienda Doña Marta",
-                                              "address": "Calle 45 # 12-30, Bogotá"}])
-        self.assertEqual(d["max_per_order_cop"], 150000)
+        self.assertEqual(d["deliver_only"], [{"name": "Larkspur Market",
+                                              "address": "120 Harbor Road, Unit 4, Riverton"}])
+        self.assertEqual(d["max_per_order_cents"], 150000)
         self.assertEqual([c[0] for c in meta.calls], ["transcribe", "chat"])
         # the audio went to a temporary file that is gone
         self.assertFalse(Path(meta.calls[0][1]).exists())
@@ -295,7 +295,7 @@ class MandateServiceTests(Isolated):
         self.assertEqual(signed["active"], "signed_here")
         self.assertTrue(signed["hash_ok"])
         self.assertTrue(signed["signature_valid"])
-        self.assertEqual(signed["signed_by"], "owner-key:marta")
+        self.assertEqual(signed["signed_by"], "owner-key:larkspur")
         self.assertEqual(signed["transcript"], PHRASE)
         on_disk = load(config.active_policy_path())
         self.assertTrue(on_disk.signature_valid(keys.public_from_seed(self.seed)))
@@ -342,12 +342,12 @@ class MandateServiceTests(Isolated):
 
     def test_refused_mandates_change_nothing(self):
         cases = [
-            FakeMeta(GOOD, transcript="No pidas con entrega en la tienda, máximo ciento "
-                                      "cincuenta mil pesos por pedido"),
-            FakeMeta(with_(max_amount_words="un millón de pesos", max_per_order_cop=1000000),
-                     transcript="Solo pide con entrega en la tienda, máximo un millón de pesos"),
-            FakeMeta(with_(deliver_only=[{"name": "Bodega Norte", "address": ""}]),
-                     transcript="Solo pide con entrega en Bodega Norte, máximo ciento cincuenta mil pesos"),
+            FakeMeta(GOOD, transcript="Never ship to our warehouse, at most fifteen hundred "
+                                      "dollars per order"),
+            FakeMeta(with_(max_amount_words="one million dollars", max_per_order_dollars=1000000),
+                     transcript="Only ship to our warehouse, at most one million dollars"),
+            FakeMeta(with_(deliver_only=[{"name": "Dock 9 Storage", "address": ""}]),
+                     transcript="Only ship to Dock 9 Storage, at most fifteen hundred dollars"),
             FakeMeta("not json"),
         ]
         for meta in cases:
@@ -363,8 +363,8 @@ class MandateServiceTests(Isolated):
 
     def test_a_refusal_drops_the_earlier_draft(self):
         d = self.draft(FakeMeta(GOOD)).json()
-        self.draft(FakeMeta(GOOD, transcript="No pidas con entrega en la tienda, máximo "
-                                             "ciento cincuenta mil pesos"))
+        self.draft(FakeMeta(GOOD, transcript="Don't ship to our warehouse, at most "
+                                             "fifteen hundred dollars"))
         self.assertEqual(self.c.post("/api/mandate/sign", json={"id": d["id"]},
                                      headers=SAME).status_code, 409)
         self.assertFalse(config.active_policy_path().exists())
@@ -396,9 +396,9 @@ class MandateServiceTests(Isolated):
         self.assertEqual(self.c.post("/api/mandate/sign", json={"id": ["x"]},
                                      headers=SAME).status_code, 409)
         # the page cannot send its own rules: only the id counts
-        r = self.c.post("/api/mandate/sign", json={"id": d["id"], "max_per_order_cop": 9_999_999},
+        r = self.c.post("/api/mandate/sign", json={"id": d["id"], "max_per_order_cents": 9_999_999},
                         headers=SAME)
-        self.assertEqual(r.json()["max_per_order_cop"], 150000)
+        self.assertEqual(r.json()["max_per_order_cents"], 150000)
 
     def test_no_owner_key_signs_nothing(self):
         d = self.draft(FakeMeta(GOOD)).json()
@@ -413,7 +413,7 @@ class MandateServiceTests(Isolated):
         from common.meta_client import NotConfigured
 
         class Down(FakeMeta):
-            def transcribe(self, audio_path, language="es"):
+            def transcribe(self, audio_path, language="en"):
                 raise NotConfigured("META_API_KEY")
         r = self.draft(Down(GOOD))
         self.assertEqual(r.status_code, 503)

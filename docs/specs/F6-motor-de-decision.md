@@ -6,6 +6,8 @@ Concreta la fila F6 del spec general: aplica la política y las reglas, y decide
 
 > **1 nov (R2):** la regla 3 antes ataba un pago a una cuenta; ahora ata el pedido a la dirección de entrega (`address_allowed`, `03-revision-31-oct.md` §10). Las reglas no cambian de forma.
 
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
+
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
@@ -41,7 +43,7 @@ Del spec de construcción, en orden (la primera que aplica decide):
 
 1. **No se puede verificar.** Si SAM no encuentra monto, dirección de entrega o botón con confianza suficiente (F4-D2), estado `cannot_verify` y se bloquea. Va primero: no se puede comparar lo que no se lee.
 2. **Divergencia.** Si F5 devuelve texto del código no dibujado, o texto dibujado ausente del código (ya filtrado a lo que parece una instrucción), estado `divergence` y se bloquea.
-3. **Política.** Si la dirección o el monto leídos de los píxeles no cumplen la política —otra dirección (nombre o dirección, F6-D2), o más de `max_per_order_cop`—, estado `policy_violation` y se bloquea. La regla 3a bloquea cualquier dirección en pantalla que la política no permita, aunque no esté en la caja de «Deliver to».
+3. **Política.** Si la dirección o el monto leídos de los píxeles no cumplen la política —otra dirección (nombre o dirección, F6-D2), o más de `max_per_order_cents`—, estado `policy_violation` y se bloquea. La regla 3a bloquea cualquier dirección en pantalla que la política no permita, aunque no esté en la caja de «Ship to».
 4. **Necesita aprobación.** Si todo cumple y la acción confirma el pedido, estado `ok` y se pide aprobación (F7), con los recortes.
 5. **Después del clic** (la hace F8, no F6): en la pantalla de revisión y en el resultado, si los recortes no coinciden con los aprobados, `mismatch` y el recibo queda marcado.
 
@@ -55,7 +57,7 @@ Spark lee la pantalla y podría caer en una orden escondida (riesgo del spec gen
 
 1. Con una captura cuyo monto, dirección de entrega o botón no se leen con confianza, el estado es `cannot_verify` y bloquea.
 2. Con una divergencia filtrada no vacía (en cualquier sentido), el estado es `divergence` y bloquea.
-3. Con un destino (nombre o dirección) fuera de `deliver_only`, o un monto sobre `max_per_order_cop`, el estado es `policy_violation` y bloquea.
+3. Con un destino (nombre o dirección) fuera de `deliver_only`, o un monto sobre `max_per_order_cents`, el estado es `policy_violation` y bloquea.
 4. Con todo en regla y una confirmación de pedido, el estado es `ok` y se emite `approval.requested`.
 5. La dirección y el monto de la regla 3 salen de los píxeles, no del DOM.
 6. Un fallo de modelo en F4/F5 llega al motor como baja confianza o fuera de esquema y produce `cannot_verify`, nunca `ok`.

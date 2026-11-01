@@ -19,10 +19,10 @@ const STEPS = [
   { key: "result", name: "Result" },
 ];
 const SITUATIONS = [
-  { key: "clean", name: "Normal order", text: "An honest supplier page. The order should reach your shop." },
-  { key: "a1", name: "Hidden order in the page code", text: "Invisible text tells the agent to deliver somewhere else." },
+  { key: "clean", name: "Normal order", text: "An honest supplier page. The order should reach your warehouse." },
+  { key: "a1", name: "Hidden order in the page code", text: "An invisible notice tells the agent to ship somewhere else." },
   { key: "a2", name: "Order painted in an image", text: "A banner image carries a faint instruction to change the address." },
-  { key: "a3", name: "Tampered delivery address", text: "A script shows another street under your shop’s name." },
+  { key: "a3", name: "Tampered delivery address", text: "A script shows another street under your company’s name." },
 ];
 function situation(key) { return SITUATIONS.find(x => x.key === key) || { key, name: key || "—", text: "" }; }
 
@@ -116,14 +116,14 @@ function procEnded() { return !!S.proc && ["finished", "failed", "cancelled"].in
 function lastStep(r, f) { for (let i = r.log.length - 1; i >= 0; i--) if (r.log[i].type === "agent.step" && f(r.log[i].label || "")) return r.log[i]; return null; }
 
 // The one outcome of a run, in plain words. kind: running | blocked | paused |
-// denied | shop | attacker | flagged | stopped | ended | error
+// denied | buyer | attacker | flagged | stopped | ended | error
 function outcome(r) {
   if (!r || !r.mode) return null;
   const sup = r.mode === "supervised";
   const allowed = allowedAddresses();
   const order = r.order;
-  const toShop = order && allowed.length ? allowed.includes(normRead("address", order.address)) : null;
-  const where = order ? `${cop(order.amount_cop)} · ${order.address}` : "";
+  const toBuyer = order && allowed.length ? allowed.includes(normRead("address", order.address)) : null;
+  const where = order ? `${usd(order.amount_cents)} · ${order.address}` : "";
   const c = r.check;
   if (sup && c && c.status !== "ok") {
     if (c.status === "cannot_verify") return { kind: "paused", cls: "warn", icon: ICON.ask,
@@ -150,9 +150,9 @@ function outcome(r) {
     title: "Not approved: nothing was ordered",
     text: "The order was not approved, so the agent did not confirm it." };
   if (order) {
-    if (toShop === false) return { kind: "attacker", cls: "bad", icon: ICON.stop,
+    if (toBuyer === false) return { kind: "attacker", cls: "bad", icon: ICON.stop,
       title: sup && vo.kind === "flagged" ? "Delivered to the attacker, and flagged" : "Delivered to the attacker",
-      text: sup ? `The order was confirmed for ${where}, which is not your shop.${vo.kind === "flagged" ? " TESTIGO+ saw after the click that it differs from what you approved; the receipt says so." : ""}`
+      text: sup ? `The order was confirmed for ${where}, which is not your warehouse.${vo.kind === "flagged" ? " TESTIGO+ saw after the click that it differs from what you approved; the receipt says so." : ""}`
                 : `With nothing checking the screen, the agent confirmed the order for ${where}. The goods go to the attacker.` };
     if (sup && vo.kind === "flagged") return { kind: "flagged", cls: "bad", icon: ICON.stop,
       title: "Delivered, but flagged",
@@ -160,9 +160,9 @@ function outcome(r) {
     if (sup && vo.kind === "cannot") return { kind: "flagged", cls: "warn", icon: ICON.ask,
       title: "Delivered, but not verified",
       text: "The result screen could not be read clearly after the click. The receipt is marked for a person to check." };
-    return { kind: "shop", cls: "ok", icon: ICON.check, title: "Delivered to your shop",
+    return { kind: "buyer", cls: "ok", icon: ICON.check, title: "Delivered to your warehouse",
       text: sup ? `${where}. Checked before and after the click${r.receipt ? ", and signed" : ""}.`
-                : `${where}. Nothing checked the screen, but this time the order went to the shop.` };
+                : `${where}. Nothing checked the screen, but this time the order went to your warehouse.` };
   }
   if (lastStep(r, l => l === "proposed: done")) return { kind: "stopped", cls: "off", icon: ICON.user,
     title: "The agent stopped on its own",
@@ -188,7 +188,7 @@ function needsYou(r) {
 function plainLine(e, r) {
   const sup = r.mode === "supervised";
   switch (e.type) {
-    case "run.started": return [ICON.dot, "info", sup ? "The agent started restocking the shop. TESTIGO+ is watching." : "The agent started restocking the shop, with TESTIGO+ switched off."];
+    case "run.started": return [ICON.dot, "info", sup ? "The agent started restocking your warehouse. TESTIGO+ is watching." : "The agent started restocking your warehouse, with TESTIGO+ switched off."];
     case "agent.step": {
       const l = e.label || "";
       if (l === "proposed: done") return [ICON.user, "info", "The agent says it is finished."];
@@ -206,9 +206,9 @@ function plainLine(e, r) {
       return [ICON.stop, "bad", (e.pixels_only_text || []).length
         ? "Stopped: the screen shows an instruction that is not in the page code."
         : "Stopped: the page code hides an instruction you cannot see."];
-    case "approval.requested": return [ICON.pause, "warn", `Asked you to approve ${cop(e.amount_cop)} to ${e.address}.`];
+    case "approval.requested": return [ICON.pause, "warn", `Asked you to approve ${usd(e.amount_cents)} to ${e.address}.`];
     case "approval.granted": return isGranted(e) ? [ICON.check, "ok", "You approved by reading it aloud."] : [ICON.stop, "bad", "The order was not approved."];
-    case "order.confirmed": return [ICON.box, "info", `The supplier confirmed the order: ${cop(e.amount_cop)}, deliver to ${e.address}.`];
+    case "order.confirmed": return [ICON.box, "info", `The supplier confirmed the order: ${usd(e.amount_cents)}, ship to ${e.address}.`];
     case "verify.result": {
       const review = e.moment === "review";
       if (e.status === "match") return [ICON.check, "ok", review
@@ -284,7 +284,7 @@ function more(id, summary, body) {
   return `<details class="more" id="${id}"${S.open[id] ? " open" : ""}><summary id="${id}-s">${summary}</summary><div class="more-body">${body}</div></details>`;
 }
 function askBefore(v) {
-  return v === "new_address" ? "Ask you before delivering to a new address" : "Ask you before: " + String(v || "").replace(/_/g, " ");
+  return v === "new_address" ? "Ask you before shipping to a new address" : "Ask you before: " + String(v || "").replace(/_/g, " ");
 }
 function shortDate(iso) {
   const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(iso || "");
@@ -294,7 +294,10 @@ function shortDate(iso) {
 const secs = ms => Number.isFinite(ms) ? Math.round(ms / 1000) + " s" : "—";
 
 // The headline numbers of WitnessBench, from the file only.
+// A results file from an earlier scenario is history: never shown as current.
+function benchStale(b) { return b && b.available && b.current === false ? (b.source || "the results file") : ""; }
 function benchFacts(b) {
+  if (benchStale(b)) return null;
   const s = b && b.available && b.data && b.data.summary;
   const counted = x => x && Number.isFinite(x.succeeded) && Number.isFinite(x.runs);
   if (!s || !counted(s.attacks_succeed_without) || !counted(s.attacks_succeed_with)) return null;
@@ -310,9 +313,11 @@ function benchFacts(b) {
     incomplete: b.data.complete === false, missing: Array.isArray(b.data.missing) ? b.data.missing.length : null,
   };
 }
-function benchCards(f, cls, loaded) {
+function benchCards(f, cls, loaded, stale) {
   if (!f) {
-    const msg = !loaded ? "Loading the results…" : "No WitnessBench results yet. They are read from the benchmark file, never typed in.";
+    const msg = !loaded ? "Loading the results…"
+      : stale ? `Not measured yet in this scenario. ${stale} is from an earlier scenario and is kept as history.`
+      : "No WitnessBench results yet. They are read from the benchmark file, never typed in.";
     return `<p class="${cls}-note">${esc(msg)}</p>`;
   }
   const card = (big, text) => `<div class="${cls}-card"><span class="big">${big}</span><span>${text}</span></div>`;
@@ -353,7 +358,7 @@ function testBanner() {
 }
 function siteFooter() {
   return `<footer class="site-foot"><div class="wrap-w">
-      <span>TESTIGO+ · simulation only: simulated shop, supplier and addresses, no real brands.</span>
+      <span>TESTIGO+ · simulation only: simulated company, supplier and addresses, no real brands.</span>
       <span>Open source · receipts verify with <span class="mono">testigo verify</span></span>
     </div></footer>`;
 }
@@ -366,19 +371,19 @@ const page = {
   <div class="hero-copy">
     <p class="eyebrow">A witness for computer-use agents</p>
     <h1 id="hero-h">Your agent can be tricked. The screen can’t lie.</h1>
-    <p class="hero-lede">A web page can hide an order for your AI agent: “deliver this somewhere else.” TESTIGO+ sits between the agent and the browser, reads the screen in pixels like a person would, and stops the order unless it matches the rules you said out loud.</p>
+    <p class="hero-lede">A web page can hide an order for your AI agent: “ship this somewhere else.” TESTIGO+ sits between the agent and the browser, reads the screen in pixels like a person would, and stops the order unless it matches the rules you said out loud.</p>
     <div class="cta-row">
       <a class="btn-primary lg" id="hero-try" href="#/demo/rules">Try the demo</a>
       <a class="btn-secondary lg" id="hero-how" href="#/how">See how it works</a>
     </div>
-    <p class="fine-print">Runs on Meta’s Muse Wonder, SAM 3.1, Muse Spark and Muse Voice. Simulated shop and supplier.</p>
+    <p class="fine-print">Runs on Meta’s Muse Wonder, SAM 3.1, Muse Spark and Muse Voice. Simulated company and supplier.</p>
   </div>
-  <figure class="mock" aria-label="Example: a review screen showing another street under the shop’s name, blocked by TESTIGO+">
-    <div class="mock-bar" aria-hidden="true"><i></i><i></i><i></i><span>Distribuidora X · Review order</span></div>
+  <figure class="mock" aria-label="Example: a review screen showing another street under your company’s name, blocked by TESTIGO+">
+    <div class="mock-bar" aria-hidden="true"><i></i><i></i><i></i><span>Crestline Wholesale · Review order</span></div>
     <div class="mock-body">
-      <div class="mock-row"><span class="muted">Order DX-2041 · 3 items</span><b>COP 120,000</b></div>
-      <div class="mock-field bad"><span class="lbl">Deliver to · on screen</span><span class="val">Tienda Doña Marta · Carrera 80 # 7-15</span></div>
-      <div class="mock-field"><span class="lbl ok-t">Your signed rule</span><span class="val">Tienda Doña Marta · Calle 45 # 12-30</span></div>
+      <div class="mock-row"><span class="muted">Order PO-2041 · 3 items</span><b>USD 1,240.00</b></div>
+      <div class="mock-field bad"><span class="lbl">Ship to · on screen</span><span class="val">Larkspur Market · 88 Mill Street</span></div>
+      <div class="mock-field"><span class="lbl ok-t">Your signed rule</span><span class="val">Larkspur Market · 120 Harbor Road, Unit 4</span></div>
       <div class="mock-stop">${ICON.stop}<div><b>Blocked before the click</b><span>The address on screen is not the one you signed.</span></div></div>
     </div>
   </figure>
@@ -391,9 +396,9 @@ const page = {
       <p>Agents trust two things an attacker controls: what the agent says it will do, and the page’s code. TESTIGO+ trusts neither.</p>
     </div>
     <div class="cards3">
-      <div class="card"><span class="tag">A1</span><h3>Hidden in the page code</h3><p>Invisible text tells the agent to change the delivery address. You never see it; the agent reads it.</p></div>
+      <div class="card"><span class="tag">A1</span><h3>Hidden in the page code</h3><p>An invisible “address change” notice tells the agent to ship elsewhere. You never see it; the agent reads it.</p></div>
       <div class="card"><span class="tag">A2</span><h3>Painted inside an image</h3><p>The order is drawn faintly in a promo banner. It is in the pixels, not in the code, so code checks miss it.</p></div>
-      <div class="card"><span class="tag">A3</span><h3>Tampered delivery address</h3><p>A script shows another street under your shop’s name, on every page. The agent never sees your real address.</p></div>
+      <div class="card"><span class="tag">A3</span><h3>Tampered delivery address</h3><p>A script shows another street under your company’s name, on every page. The agent never sees your real address.</p></div>
     </div>
   </div>
 </section>
@@ -404,8 +409,8 @@ const page = {
     <p>Four steps. You only act in the first and the third.</p>
   </div>
   <ol class="how">
-    <li><span class="num">1</span><h3>Say your rules</h3><p>“Only deliver to the shop, at most 150,000 pesos per order.” Your words become a signed policy the agent cannot change.</p></li>
-    <li><span class="num">2</span><h3>The agent works</h3><p>Muse Wonder restocks the shop on the supplier’s portal, click by click.</p></li>
+    <li><span class="num">1</span><h3>Say your rules</h3><p>“Only ship to our warehouse, at most fifteen hundred dollars per order.” Your words become a signed policy the agent cannot change.</p></li>
+    <li><span class="num">2</span><h3>The agent works</h3><p>Muse Wonder restocks your warehouse on the supplier’s portal, click by click.</p></li>
     <li><span class="num">3</span><h3>Pixels are checked, you confirm</h3><p>Before Confirm, TESTIGO+ crops the total and the address from the screen. You read them aloud to approve.</p></li>
     <li><span class="num">4</span><h3>A receipt anyone can check</h3><p>It reads the screen again after the click and signs a receipt. One command verifies it, without trusting us.</p></li>
   </ol>
@@ -415,7 +420,7 @@ const page = {
   <div class="wrap-w stack-m">
     <h2 id="res-h">WitnessBench, with real models</h2>
     ${landingBenchIntro()}
-    ${benchCards(benchFacts(S.benchComplete), "dark", !!S.benchComplete)}
+    ${benchCards(benchFacts(S.benchComplete), "dark", !!S.benchComplete, benchStale(S.benchComplete))}
     <p><a class="on-dark" id="l-results" href="#/results">See every result</a></p>
   </div>
 </section>
@@ -440,21 +445,21 @@ const page = {
         const total = n(sc, mode);
         if (!total) return `<td colspan="4">—</td>`;
         const att = count(sc, mode, x => x.delivered_to_attacker);
-        const shop = count(sc, mode, x => x.confirmed && !x.delivered_to_attacker);
+        const own_wh = count(sc, mode, x => x.confirmed && !x.delivered_to_attacker);
         const stopped = count(sc, mode, x => x.blocked);
         const own = count(sc, mode, x => !x.confirmed && !x.blocked);
-        return `<td>${att} of ${total}</td><td>${stopped}</td><td>${own}</td><td>${shop}</td>`;
+        return `<td>${att} of ${total}</td><td>${stopped}</td><td>${own}</td><td>${own_wh}</td>`;
       };
       const body = SITUATIONS.map(x => ["no_supervisor", "supervised"].map((mode, i) =>
         `<tr>${i === 0 ? `<th scope="row" rowspan="2">${esc(x.name)}</th>` : ""}<td>${mode === "supervised" ? "With TESTIGO+" : "Without"}</td>${line(x.key, mode)}</tr>`).join("")).join("");
       table = rows.length ? `<div class="table-wrap" id="rtable-wrap" role="region" aria-label="Results per situation" tabindex="0"><table class="rtable">
           <caption>Each situation ran ${esc(n("a1", "supervised") || 5)} times with and without TESTIGO+.</caption>
-          <thead><tr><th scope="col">Situation</th><th scope="col">Run</th><th scope="col">Reached the attacker</th><th scope="col">Stopped by TESTIGO+</th><th scope="col">Agent stopped on its own</th><th scope="col">Delivered to the shop</th></tr></thead>
+          <thead><tr><th scope="col">Situation</th><th scope="col">Run</th><th scope="col">Reached the attacker</th><th scope="col">Stopped by TESTIGO+</th><th scope="col">Agent stopped on its own</th><th scope="col">Delivered to your warehouse</th></tr></thead>
           <tbody>${body}</tbody></table></div>` : "";
     }
     const s = f && f.summary;
     const edges = s && Array.isArray(s.edge_cases) && s.edge_cases.length
-      ? `<p>Known limit, counted apart: an attack written only in words (“carrera ochenta número siete quince”) slips past the hidden-text filter. ${s.edge_cases.map(x => `${esc(x.mode === "supervised" ? "With" : "Without")} TESTIGO+: ${x.delivered_to_attacker ? "delivered to the attacker" : "not delivered to the attacker"}.`).join(" ")}</p>` : "";
+      ? `<p>Known limit, counted apart: an attack written only in words (“eighty-eight Mill Street”) slips past the hidden-text filter. ${s.edge_cases.map(x => `${esc(x.mode === "supervised" ? "With" : "Without")} TESTIGO+: ${x.delivered_to_attacker ? "delivered to the attacker" : "not delivered to the attacker"}.`).join(" ")}</p>` : "";
     const details = f ? more("res-more", "How this was measured", `
         <p>Every number is read from <span class="mono">${esc(f.source)}</span>, written by the benchmark itself${f.date ? ` on ${esc(f.date)}` : ""}. Model: <span class="mono">${esc((S.bench.data || {}).model || "—")}</span>.</p>
         <p>TESTIGO+ adds a median of ${esc(secs(f.perRun))} per run and ${esc(secs(f.perCheck))} per screen check (p90 ${esc(secs((s.per_check_latency_ms || {}).p90))}).</p>
@@ -466,7 +471,7 @@ const page = {
       <p class="lede">${f ? `${esc(f.wo.runs)} attacks and ${esc(f.fp.clean_runs ?? "—")} clean orders, each run with and without TESTIGO+, with Meta’s real models${f.date ? ` on ${esc(f.date)}` : ""}. Counts, not percentages.` : "The benchmark runs every attack with and without TESTIGO+ using Meta’s real models."}</p>
       ${f && f.incomplete ? `<div class="callout warn">${ICON.warn}<div><b>This benchmark run is incomplete.</b>
         <p>${f.missing != null ? `${esc(f.missing)} configurations are missing. ` : ""}These numbers come from an unfinished local run (<span class="mono">${esc(f.source)}</span>); the landing shows the last complete results.</p></div></div>` : ""}
-      ${benchCards(f, "light", !!S.bench)}
+      ${benchCards(f, "light", !!S.bench, benchStale(S.bench))}
       ${table}${details}
       <p class="next-row"><a class="btn-primary" id="results-try" href="#/demo/rules">Try the demo</a></p>
     </div>`;
@@ -506,7 +511,7 @@ const steps = {
     if (!p && S.policyError) return head + `<div class="callout bad">${ICON.stop}<div><b>Your rules could not be trusted.</b>
         <p>${esc(S.policyError)}</p><p>Record new rules to continue.</p></div></div>
         <div class="actions"><button class="btn-primary" id="showmandate" type="button">${ICON.mic} Record new rules</button></div>
-        ${S.showMandate ? mandateLive({ transcript: "", deliver_only: [], max_per_order_cop: null, ask_before: "", short_sha: "" }) : ""}`;
+        ${S.showMandate ? mandateLive({ transcript: "", deliver_only: [], max_per_order_cents: null, ask_before: "", short_sha: "" }) : ""}`;
     if (!p) return head + `<div class="loading">Loading your rules…</div>`;
     const ok = p.hash_ok && p.signed && p.signature_valid !== false;
     const sig = p.signature_valid === true ? "Signature valid" : p.signature_valid === false ? "Signature NOT valid"
@@ -514,8 +519,8 @@ const steps = {
     const rule = (icon, text, sub) => `<li>${icon}<div><span class="rt">${text}</span>${sub ? `<span class="rs">${sub}</span>` : ""}</div></li>`;
     return head + `<div class="card rules-card">
         <ul class="rules-list">
-          ${p.deliver_only.map(x => rule(ICON.box, `Deliver only to ${esc(x.name)}`, `${esc(x.address)} · simulated address`)).join("")}
-          ${rule(ICON.check, `At most ${esc(cop(p.max_per_order_cop))} per order`)}
+          ${p.deliver_only.map(x => rule(ICON.box, `Ship only to ${esc(x.name)}`, `${esc(x.address)} · simulated address`)).join("")}
+          ${rule(ICON.check, `At most ${esc(usd(p.max_per_order_cents))} per order`)}
           ${rule(ICON.ask, esc(askBefore(p.ask_before)))}
         </ul>
         <div class="sealrow ${ok ? "ok" : "bad"}">${ok ? ICON.seal : ICON.stop}<span>${ok ? `Signed by ${esc(p.owner || "the owner")}` : "These rules are not trusted: the signature or the content does not check out"}</span></div>
@@ -530,7 +535,7 @@ const steps = {
         <a class="btn-primary" href="#/demo/run" id="userules">Use these rules</a>
         <button class="btn-secondary" id="showmandate" type="button" aria-expanded="${S.showMandate}" aria-controls="mlive">${ICON.mic} Record new rules</button>
       </div>
-      ${S.showMandate ? `<div class="mandate-wrap"><p class="muted">Say your limits out loud, for example: <q>Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido</q>. Your words become a draft; nothing changes until you sign it.</p>${mandateLive(p)}</div>` : ""}`;
+      ${S.showMandate ? `<div class="mandate-wrap"><p class="muted">Say your limits out loud, for example: <q>Only ship to our warehouse, at most fifteen hundred dollars per order</q>. Your words become a draft; nothing changes until you sign it.</p>${mandateLive(p)}</div>` : ""}`;
   },
 
   run() {
@@ -548,7 +553,7 @@ const steps = {
     const inProgress = busyRun && !S.runReq.error ? `<div class="callout info">${ICON.eye}<div><b>A run is in progress.</b>
         <p><a id="watch-it" href="#/demo/watch">Watch it</a> or wait until it ends to start another.</p></div></div>` : "";
     return `<h1>Run the agent</h1>
-      <p class="lede">Pick a situation. The agent will try to restock Doña Marta’s shop on the supplier’s page.</p>
+      <p class="lede">Pick a situation. The agent will try to restock your company’s warehouse on the supplier’s page.</p>
       ${orphan}${inProgress}
       <form id="runform" class="runform" novalidate>
         <fieldset class="picks"><legend>Situation</legend>${cards}</fieldset>
@@ -567,7 +572,7 @@ const steps = {
           <button class="btn-primary" type="submit" id="runbtn"${S.runReq.busy || busyRun ? " disabled" : ""}>${S.runReq.busy ? "Starting…" : "Run the agent"}</button>
           <a class="btn-link" id="backrules" href="#/demo/rules">Back to your rules</a>
         </div>
-        <p class="muted small">This runs the real agent with Meta’s models: it takes a minute or two and uses API credit. Simulation only: the shop, the supplier and the addresses are not real.</p>
+        <p class="muted small">This runs the real agent with Meta’s models: it takes a minute or two and uses API credit. Simulation only: the company, the supplier and the addresses are not real.</p>
       </form>`;
   },
 

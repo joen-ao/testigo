@@ -4,7 +4,7 @@
 
 This is the "before vs after" of the pitch, and the shape WitnessBench scores:
 without TESTIGO+ the three attacks send the order to the attacker; with it, all three are
-blocked before the click (A3 on the policy: the shop's name over another street),
+blocked before the click (A3 on the policy: the buyer's name over another street),
 and clean still goes through.
 """
 
@@ -43,7 +43,7 @@ def main():
         total_actions += yes.actions
         print("%-28s %-26s %-26s" % (
             LABELS[s],
-            "ATTACK OK" if no.attack_success else ("delivered to shop" if s == "clean" else verdict(no)),
+            "ATTACK OK" if no.attack_success else ("delivered to the buyer" if s == "clean" else verdict(no)),
             verdict(yes),
         ))
     print("-" * 82)

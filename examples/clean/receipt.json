@@ -1,40 +1,40 @@
 {
-  "id": "rcpt_20261031_174528_3c53",
-  "time": "2026-10-31T17:45:28-05:00",
-  "agent": "wonder@marta-shop",
-  "action": "confirm order COP 120,000 -> deliver to Tienda Doña Marta · Calle 45 # 12-30, Bogotá",
-  "amount_cop": 120000,
-  "address": "Tienda Doña Marta · Calle 45 # 12-30, Bogotá",
-  "policy_sha256": "e83de2e784bca58b6c701c977838c38cab1824ff81b3646cea518c962bb3de37",
+  "id": "rcpt_20261031_192643_8990",
+  "time": "2026-10-31T19:26:43-05:00",
+  "agent": "wonder@larkspur-market",
+  "action": "confirm order USD 1,240.00 -> ship to Larkspur Market · 120 Harbor Road, Unit 4, Riverton",
+  "amount_cents": 124000,
+  "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton",
+  "policy_sha256": "d1f9ff48f2081e4aa4d42c1c276451497afc214a01983e7fa82d740f5753a868",
   "approved": {
-    "amount": "23502194223a2391848247bf520274b04085d782c15d84173774e538afd0353f",
-    "address": "58ad714cc17eaac863f4182ce5038e035eab31614776cecb86c8649210f3074e"
+    "amount": "09c3c4cdc1e4ed582ceaaed40fa9200cded9f6eaa38f4a00999e98910987f8ca",
+    "address": "e32f2b04ac6019090f04af567ed9af93aee0fa86d22a57d29832dcf792796843"
   },
   "executed": {
-    "amount": "23502194223a2391848247bf520274b04085d782c15d84173774e538afd0353f",
-    "address": "58ad714cc17eaac863f4182ce5038e035eab31614776cecb86c8649210f3074e"
+    "amount": "09c3c4cdc1e4ed582ceaaed40fa9200cded9f6eaa38f4a00999e98910987f8ca",
+    "address": "e32f2b04ac6019090f04af567ed9af93aee0fa86d22a57d29832dcf792796843"
   },
   "status": "confirmed",
   "approval": {
     "method": "passkey",
-    "voice_transcript": "ciento veinte mil pesos, entrega en Tienda Doña Marta",
+    "voice_transcript": "Twelve hundred forty dollars, ship to Larkspur Market",
     "voice_match": true
   },
-  "signed_by": "passkey:marta",
+  "signed_by": "passkey:larkspur",
   "read": {
     "approved": {
-      "amount": "120000",
-      "address": "Tienda Doña Marta · Calle 45 # 12-30, Bogotá"
+      "amount": "USD 1,240.00",
+      "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"
     },
     "executed": {
-      "amount": "120000",
-      "address": "Tienda Doña Marta · Calle 45 # 12-30, Bogotá"
+      "amount": "USD 1,240.00",
+      "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"
     }
   },
   "comparison": {
     "status": "match",
     "by": "read"
   },
-  "pubkey": "cdbc37ce6a951725b156be636d547c25c93e9ec84ad6d6accea71c3bf5df0113",
-  "signature": "ed25519:a2cf1419500412701f873c96e870345577f57d1e2ec9e90c31c93207b1c8f4f3c82f4f7d5647eda6feb86bf06bd6db1d87974d1208be6bbcc7b11cdcfd901b0f"
+  "pubkey": "4c4803925da13df378a110d226aa995f018877f392c345dad94306c38bc2a984",
+  "signature": "ed25519:ec87bda2e2b297c191dcd4af2613f1045925f1975b71040c0345f5092172631831c90a26ef523e06c6a671ed8b11ee121261e6f4711649770f514099670e8c0d"
 }

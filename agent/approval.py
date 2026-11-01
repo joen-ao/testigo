@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.request
 
+from common.money import usd
 from approval.voice_match import voice_matches
 
 
@@ -28,7 +29,7 @@ class Approver:
 class AutoApprover(Approver):
     """Grants, as if the person read the amount aloud and tapped the passkey."""
 
-    def __init__(self, voice_transcript="ciento veinte mil pesos, entrega en Tienda Doña Marta"):
+    def __init__(self, voice_transcript="Twelve hundred forty dollars, ship to Larkspur Market"):
         self.voice_transcript = voice_transcript
 
     def approve(self, approval_event):
@@ -42,7 +43,7 @@ class AutoApprover(Approver):
 class DenyApprover(Approver):
     """Refuses — e.g. the spoken amount did not match the screen."""
 
-    def __init__(self, voice_transcript="ciento cincuenta mil pesos", reason="voice did not match"):
+    def __init__(self, voice_transcript="fifteen hundred dollars", reason="voice did not match"):
         self.voice_transcript = voice_transcript
         self.reason = reason
 
@@ -73,8 +74,8 @@ class ConsoleApprover(Approver):
         if not self.interactive:
             return False, dict(info, reason="no person at the terminal to approve")
         print("\nTESTIGO+ asks for approval (read from the pixels):")
-        print("  total:      COP {:,}".format(approval_event["amount_cop"]))
-        print("  deliver to: %s" % approval_event["address"])
+        print("  total:      %s" % usd(approval_event["amount_cents"]))
+        print("  ship to:    %s" % approval_event["address"])
         answer = self.ask("Approve this order? Type yes to approve: ").strip().lower()
         return answer == "yes", info
 
@@ -181,14 +182,14 @@ class ServiceApprover(Approver):
         if rec.get("id") != aid:
             return self._denied("the decision is for a different approval", voice)
         if (ev.get("crops") != approval_event.get("crops")
-                or ev.get("amount_cop") != approval_event.get("amount_cop")
+                or ev.get("amount_cents") != approval_event.get("amount_cents")
                 or ev.get("address") != approval_event.get("address")):
             return self._denied("the decision is for a different approval", voice)
         if rec.get("decision") != "approve":
             return self._denied(rec.get("reason") or "denied by the person", voice)
         if not voice.get("match"):
             return self._denied("approve without a voice that matched", voice)
-        ok, detail = voice_matches(voice.get("transcript", ""), approval_event.get("amount_cop"),
+        ok, detail = voice_matches(voice.get("transcript", ""), approval_event.get("amount_cents"),
                                    approval_event.get("address"))
         if not ok:
             return self._denied("the voice re-checked by the run does not match (%s)" % detail,

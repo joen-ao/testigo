@@ -1,17 +1,20 @@
-"""The clock: real time in Bogotá (America/Bogota, UTC-05:00, no DST)."""
+"""The clock: real time at the team's fixed offset (UTC-05:00, no DST).
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
+The demo's timestamps keep one fixed offset so receipts and runs sort the same
+on every machine; the offset is the team's local time (it never changes over
+the year)."""
 
-BOGOTA = ZoneInfo("America/Bogota")
+from datetime import datetime, timedelta, timezone
+
+TEAM_TZ = timezone(timedelta(hours=-5), "UTC-05:00")
 
 
 def now():
-    return datetime.now(BOGOTA)
+    return datetime.now(TEAM_TZ)
 
 
 def iso(dt=None):
-    """RFC 3339 timestamp with the Bogotá offset, e.g. 2026-10-28T09:15:44-05:00."""
+    """RFC 3339 timestamp with the fixed offset, e.g. 2026-10-28T09:15:44-05:00."""
     return (dt or now()).isoformat(timespec="seconds")
 
 

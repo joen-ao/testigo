@@ -18,7 +18,7 @@ VIEWPORT = {"width": 1280, "height": 800}
 def browser_context_options():
     """The shared, measurable browser setup (F0 §9)."""
     return dict(viewport=VIEWPORT, device_scale_factor=1, reduced_motion="reduce",
-                locale="en-US", timezone_id="America/Bogota")
+                locale="en-US", timezone_id="Etc/GMT+5")
 
 
 def main():

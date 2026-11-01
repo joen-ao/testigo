@@ -4,7 +4,9 @@
 
 Concreta la fila F7 del spec general: la cápsula con la que la persona aprueba lo que realmente va a pasar, vista en recortes reales de la pantalla, confirmada en voz alta y firmada con passkey. Responde la pregunta que Wonder hace antes de una acción importante. Si algo aquí contradice a `00-spec-general.md`, `01-spec-construccion.md` o `02-spec-vistas-maquetas.md`, mandan esos. Todo es simulación; la voz y el passkey son reales.
 
-> **1 nov (R2):** la cápsula antes aprobaba un pago; ahora aprueba un pedido: el total y la dirección de entrega (`03-revision-31-oct.md` §10). La persona lee «ciento veinte mil pesos, entrega en Tienda Doña Marta».
+> **1 nov (R2):** la cápsula antes aprobaba un pago; ahora aprueba un pedido: el total y la dirección de entrega (`03-revision-31-oct.md` §10). La persona lee «Twelve hundred forty dollars, ship to Larkspur Market».
+
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
 
 ## Decisiones pendientes
 
@@ -50,10 +52,10 @@ La nota pequeña de la cápsula: «Tu voz confirma lo que quieres; tu passkey pr
 
 ## 4. Cómo coincide la voz
 
-- La voz se transcribe con Voice Transcribe (español), a través de `common/meta_client.py`.
-- Se normaliza: minúsculas, sin puntuación, el monto en palabras a número («ciento veinte mil» → 120000).
-- Se compara el número con el monto leído de los píxeles y el nombre con el destino leído de los píxeles (F4, «Tienda Doña Marta»). Ambos deben coincidir. Los dígitos de la dirección no se dictan: los comprueban los píxeles y la política.
-- El criterio exacto (tolerancia del nombre, idioma del monto) se fija en la primera prueba con voz real; el gate de hoy ya mide voz numérica en español (95 % exacto, menos de 1,5 s).
+- La voz se transcribe con Voice Transcribe (inglés), a través de `common/meta_client.py`.
+- Se normaliza: minúsculas, sin puntuación, el monto en palabras a centavos («twelve hundred forty» → 124000).
+- Se compara el número con el monto leído de los píxeles y el nombre con el destino leído de los píxeles (F4, «Larkspur Market»). Ambos deben coincidir. Los dígitos de la dirección no se dictan: los comprueban los píxeles y la política.
+- El criterio exacto (tolerancia del nombre, idioma del monto) se fija en la primera prueba con voz real; el gate de hoy mide voz numérica en inglés (95 % exacto, menos de 1,5 s).
 
 ## 5. Criterios de aceptación de F7
 
@@ -95,9 +97,9 @@ Con R8 (`03-revision-31-oct.md`): la aprobación es **voz que coincide con los p
 **Flujo en una corrida real.**
 
 1. El loop emite `approval.requested` (monto y dirección de entrega leídos de los píxeles, hashes de los recortes) y llama al aprobador. En `agent/run.py` el aprobador es `ServiceApprover` (`agent/approval.py`): abre la aprobación en el servicio (`POST /api/approval/open`, con las rutas de los PNG de los recortes si existen) y consulta cada 0,5 s hasta que la persona decide. Sin decisión en `--approval-timeout` (300 s por defecto) la niega con el motivo y la cierra en el servicio. Servicio caído, decisión de otra aprobación o «approve» sin voz que coincida = negada.
-2. Vista 5: la persona pulsa **Record** y lee el total y el destino («ciento veinte mil pesos, entrega en Tienda Doña Marta»). El navegador graba con WebAudio y codifica **WAV PCM de 16 kHz, mono, 16 bits** en JS (Voice Transcribe solo acepta WAV); lo envía en base64 dentro de JSON a `POST /api/approval/<id>/voice`.
+2. Vista 5: la persona pulsa **Record** y lee el total y el destino («Twelve hundred forty dollars, ship to Larkspur Market»). El navegador graba con WebAudio y codifica **WAV PCM de 16 kHz, mono, 16 bits** en JS (Voice Transcribe solo acepta WAV); lo envía en base64 dentro de JSON a `POST /api/approval/<id>/voice`.
 3. El servicio valida el WAV (mono, 16 bits, 8–48 kHz, 0,3–20 s), lo escribe en un archivo temporal que borra al terminar (el audio no se guarda), llama a `MetaClient.transcribe` y compara la transcripción con `approval/voice_match.py` contra el monto y el destino **del evento** (píxeles, nunca el DOM). Devuelve la transcripción, si coincide, el monto oído y si se oyó el nombre.
-4. La vista muestra los estados: esperando voz, grabando, transcribiendo, **coincide** (verde, se activa «Approve»), **no coincide** (rojo, con la diferencia: «Amount heard COP 150,000 · screen COP 120,000» o que no se oyó el nombre del destino; se puede grabar otra vez) y **aprobado** (sello con la hora). «Deny» siempre está disponible mientras la aprobación esté abierta.
+4. La vista muestra los estados: esperando voz, grabando, transcribiendo, **coincide** (verde, se activa «Approve»), **no coincide** (rojo, con la diferencia: «Amount heard USD 1,500.00 · screen USD 1,240.00» o que no se oyó el nombre del destino; se puede grabar otra vez) y **aprobado** (sello con la hora). «Deny» siempre está disponible mientras la aprobación esté abierta.
 5. `POST /api/approval/<id>/decision` registra la decisión; el servicio rechaza «approve» sin una voz que coincida (409), no solo el botón. El loop emite `approval.granted` con `method: "voice"`, la transcripción real y `voice_match`.
 
 **Recortes en la cápsula.** `agent/run.py` envuelve el canal de píxeles (`CropFiles`) y guarda cada recorte en la carpeta de la corrida con su sha256 en el nombre; el aprobador manda las rutas cuyo hash es el del evento, así la vista 5 muestra exactamente los píxeles aprobados. Si faltan, la vista muestra el texto leído y el hash, como antes.
@@ -106,6 +108,6 @@ Con R8 (`03-revision-31-oct.md`): la aprobación es **voz que coincide con los p
 
 **Elegir el aprobador.** `python -m agent.run ... --approve-in interface|console`. Sin la opción: la interfaz si el servicio del interceptor responde en `/health`, la consola si no (`ConsoleApprover`, sin voz).
 
-**Ajustes a `voice_match`.** Montos escritos en cifras por el transcriptor («120.000», «120,000», «$120 000») se juntan antes de convertir; el nombre se compara palabra por palabra, sin tildes ni mayúsculas («tienda doña marta» = «Tienda Doña Marta»). Tras la revisión de código: (a) el monto es **una sola** frase numérica continua y bien formada («ciento veinte mil», «un millón doscientos mil» o cifras como «120.000»); una segunda frase separada («cinco mil, ciento quince mil») o una mal formada («veinte cien mil») no coincide, nunca se suman; (b) solo cuenta la frase antes del nombre del destino (después, si antes no se dijo ninguna) y los números de una dirección dicha se ignoran; (c) una negación o cancelación («no», «no pidas», «cancela», «mejor no», «nunca», «detente») rechaza; (d) se aceptan millones hasta 999.999.999; fuera de rango la vista lo dice («amount out of range»); (e) los nombres de consonantes («equis», «jota»…) valen por una letra, por si un nombre de destino la lleva. **La voz confirma el total y el NOMBRE del destino, no los dígitos de la dirección**: la dirección la comprueban los píxeles (F4/F5) y la política firmada (F1/F6). `ServiceApprover` además comprueba que el id del registro sea el que abrió y vuelve a calcular `voice_matches` con el evento; si algo no cuadra, niega. Abrir una aprobación exige `amount_cop` entero (422 si no). La grabación se corta a los 18 s para no pasar el límite de 20 s del servicio.
+**Ajustes a `voice_match`.** Los números se leen en inglés y el monto se lleva a centavos enteros: en palabras («twelve hundred forty», «one thousand two hundred forty») o en cifras escritas por el transcriptor («1,240», «1240.00», «$1,240»); el nombre se compara palabra por palabra, sin mayúsculas ni puntuación («larkspur market» = «Larkspur Market»). Tras la revisión de código: (a) el monto es **exactamente una** frase numérica continua y bien formada; una segunda frase separada o una mal formada no coincide, nunca se suman; (b) solo cuenta la frase antes del nombre del destino (después, si antes no se dijo ninguna) y los dígitos de una dirección dicha nunca cambian el monto; (c) una negación o cancelación («no», «not», «don't», «do not», «never», «cancel», «stop», «wait») rechaza; (d) fuera de rango la vista lo dice («amount out of range»). **La voz confirma el total y el NOMBRE del destino, no los dígitos de la dirección**: la dirección la comprueban los píxeles (F4/F5) y la política firmada (F1/F6). `ServiceApprover` además comprueba que el id del registro sea el que abrió y vuelve a calcular `voice_matches` con el evento; si algo no cuadra, niega. Abrir una aprobación exige `amount_cents` entero (422 si no). La grabación se corta a los 18 s para no pasar el límite de 20 s del servicio.
 
 **Pendiente.** La primera prueba con micrófono y Voice Transcribe reales (fija la tolerancia del criterio, §4). En Chromium sin interfaz de este entorno `getUserMedia` no responde ni con los flags de dispositivo falso; la revisión automática de la vista 5 sustituyó el micrófono por un oscilador de WebAudio (la grabación, el WAV y el resto del flujo sí son los reales). El passkey (F7-D3, F7-D4) sigue fuera por R8. El recibo (`build_receipt` en `agent/loop.py`) aún escribe `method: "passkey"` y una transcripción fija; lo cambia F9.

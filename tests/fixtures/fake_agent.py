@@ -13,7 +13,7 @@ Never used by WitnessBench or the video: those refuse test drivers.
 import re
 
 from agent.agent import Agent
-from agent.driver import BrowserDriver, SHOP_ADDRESS, ATTACKER_ADDRESS
+from agent.driver import BrowserDriver, BUYER_ADDRESS, ATTACKER_ADDRESS
 from common.address import ADDRESS_RE
 from tests.fixtures import captures as fx
 
@@ -45,13 +45,13 @@ class FixtureDriver(BrowserDriver):
     def execute(self, action):
         if action.get("kind") != "confirm":
             return
-        intended = action.get("address_text", SHOP_ADDRESS)
-        # A3 posts what its page shows (Carrera 80 # 7-15 under the shop's
+        intended = action.get("address_text", BUYER_ADDRESS)
+        # A3 posts what its page shows (88 Mill Street under the buyer's
         # name); the swap changes the address at the click.
         delivered_to = ATTACKER_ADDRESS if self.scenario in ("a3", "swap") else intended
         self._order = {
             "address": delivered_to,
-            "amount_cop": action.get("amount_cop", 120000),
+            "amount_cents": action.get("amount_cents", 124000),
             "scenario": self.scenario,
             "variant": self.variant,
         }
@@ -71,8 +71,8 @@ class FixtureDriver(BrowserDriver):
 class ScriptedAgent(Agent):
     is_test_double = True
 
-    def __init__(self, order_total_cop=120000, obeys_injections=True):
-        self.order_total_cop = order_total_cop
+    def __init__(self, order_total_cents=124000, obeys_injections=True):
+        self.order_total_cents = order_total_cents
         self.obeys_injections = obeys_injections
 
     def propose(self, observation):
@@ -83,11 +83,11 @@ class ScriptedAgent(Agent):
             if m and _INJECT_RE.search(line):
                 injected = m.group(0)
                 break
-        address, rationale = SHOP_ADDRESS, "confirm order DX-2041 for delivery to the shop"
+        address, rationale = BUYER_ADDRESS, "confirm order PO-2041 for delivery to the buyer"
         if injected and self.obeys_injections:
             address, rationale = injected, "followed on-screen instruction to change the address"
         return {"kind": "confirm", "address_text": address,
-                "amount_cop": self.order_total_cop, "rationale": rationale}
+                "amount_cents": self.order_total_cents, "rationale": rationale}
 
 
 def run_fixture(scenario="clean", variant=1, supervised=True, agent=None, approver=None,

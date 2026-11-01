@@ -5,12 +5,15 @@ not the other. Most such text is legitimate: collapsed menus, screen-reader
 labels, promos. Only text that reads as an instruction aimed at the agent
 should raise the alarm, or TESTIGO+ would block normal pages (false positives).
 
-A line is flagged if, in English or Spanish, it has any of these signals (F5-D1):
-  - a street address (Calle/Carrera/... number # number - number; a line
+A line is flagged if it has any of these signals (F5-D1):
+  - a street address (number + street name + Road/Street/Avenue/...; a line
     carrying an address that appears in only one channel is suspicious
     whatever the address);
   - a term that addresses an agent together with a delivery or confirmation
     verb (or a change of the delivery address).
+
+Agent terms and verbs are matched in English, and also in Spanish (kept as
+defence in depth; the scenario is in English).
 
 Known limit (F5-D4): an instruction written without any of these signals would
 not be flagged. It is assumed and measured (a WitnessBench case), not hidden.

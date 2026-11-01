@@ -15,6 +15,7 @@ A bundle is the run folder itself (one receipt per run):
 from pathlib import Path
 
 from common import config
+from common.money import usd
 from . import keys
 from .receipt import CROP_NAMES, build, dumps
 
@@ -70,16 +71,16 @@ def sign_order(policy, approval_event, approval_info, approved_crops, seed,
                       if n in CROP_NAMES and b} or None
     receipt = build(
         policy,
-        action_text="confirm order COP {:,} -> deliver to {}".format(
-            approval_event["amount_cop"], approval_event["address"]),
-        amount_cop=approval_event["amount_cop"],
+        action_text="confirm order {} -> ship to {}".format(
+            usd(approval_event["amount_cents"]), approval_event["address"]),
+        amount_cents=approval_event["amount_cents"],
         address_text=approval_event["address"],
         approved_crops=approved_crops,
         executed_crops=executed_crops,
         approval={"method": approval_info.get("method", ""),
                   "voice_transcript": approval_info.get("voice_transcript", ""),
                   "voice_match": approval_info.get("voice_match")},
-        approved_read={"amount": str(approval_event["amount_cop"]),
+        approved_read={"amount": usd(approval_event["amount_cents"]),
                        "address": approval_event["address"]},
         executed_read=executed_read,
         signed_by="%s:%s" % (approval_info.get("method") or "approval", policy.owner),

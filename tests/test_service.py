@@ -221,7 +221,7 @@ class RunEndpointTests(unittest.TestCase):
 
     def test_cancel_during_an_approval_denies_it(self):
         from interceptor import events as ev
-        a = ev.approval_requested(5, 120000, "Tienda Doña Marta · Calle 45 # 12-30, Bogotá", "a" * 64, "b" * 64)
+        a = ev.approval_requested(5, 120000, "Larkspur Market · 120 Harbor Road, Unit 4, Riverton", "a" * 64, "b" * 64)
         self.c.post("/api/run", json={"scenario": "clean", "supervised": True})
         self.c.post("/api/approval/open", json={"event": a})
         self.assertIsNone(service.desk.current()["decision"])

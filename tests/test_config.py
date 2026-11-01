@@ -41,7 +41,7 @@ class PathAndClockTests(unittest.TestCase):
         self.assertTrue(str(s.signing_key_path).startswith(str(config.ROOT)))
         self.assertTrue(str(s.runs_dir).startswith(str(config.ROOT)))
 
-    def test_bogota_offset(self):
+    def test_fixed_offset(self):
         self.assertTrue(clock.iso().endswith("-05:00"))
 
 

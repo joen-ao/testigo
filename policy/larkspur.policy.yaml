@@ -1,0 +1,21 @@
+# TESTIGO+ signed policy — the compiled output of the company's spoken mandate (F1).
+# The interceptor enforces this; the agent cannot change it. Values are simulated.
+# The delivery destination is tied by name AND address (F1-D2): the address is
+# not spoken in the demo phrase, so it is taken from the buyer profile
+# (common/config.py BUYER) and marked simulated. Amounts are integer cents.
+version: 1
+owner: larkspur
+source: voice
+transcript: "Only ship to our warehouse, at most fifteen hundred dollars per order"
+rules:
+  - deliver_only:
+      - name: "Larkspur Market"
+        address: "120 Harbor Road, Unit 4, Riverton"
+  - max_per_order_cents: 150000
+  - ask_before: new_address
+signed_by: passkey:larkspur
+# sha256 over the canonical content (everything except sha256 and signature);
+# signature is an Ed25519 signature of the owner's key over the same content.
+# Both are stamped by policy/compile.py; the placeholders below are replaced.
+sha256: "d1f9ff48f2081e4aa4d42c1c276451497afc214a01983e7fa82d740f5753a868"
+signature: "ed25519:18b3837d345229145ca269661679053de775c039611761018fd665de30323649ab5ad4507730dbce49c22b2623d8779dfa59bf4e2192b9262772c79569722603"

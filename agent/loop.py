@@ -22,6 +22,7 @@ interface. The sink is best effort and never changes the outcome.
 """
 
 from common import config
+from common.money import usd
 from interceptor import events as ev
 from interceptor.engine import Interceptor
 from interceptor.policy import load as load_policy
@@ -164,7 +165,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                     a = decision.approval_event
                     approved = {"event": a, "info": info, "crops": a["crops"],
                                 "bytes": {n: obs.crops.get(n, b"") for n in CROP_NAMES},
-                                "read": {"amount": str(a["amount_cop"]), "address": a["address"]}}
+                                "read": {"amount": usd(a["amount_cents"]), "address": a["address"]}}
 
         try:
             driver.execute(action)
@@ -180,7 +181,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
         out.order_capture = obs
 
         out.emit(ev.order_confirmed(obs.frame, out.order.get("address"),
-                                     out.order.get("amount_cop")))
+                                     out.order.get("amount_cents")))
         after = driver.observe_after()
         out.emit(ev.frame_captured(after.frame, after.sha(), image=getattr(after, "image", None)))
         if supervised and approved is None:
@@ -209,7 +210,7 @@ def _late_order(out, driver, supervised, approved):
     F3): read the log once more before the run ends, so it is never missed."""
     out.order = out.order or driver.last_order
     if out.order:
-        out.emit(ev.order_confirmed(0, out.order.get("address"), out.order.get("amount_cop")))
+        out.emit(ev.order_confirmed(0, out.order.get("address"), out.order.get("amount_cents")))
         if supervised and approved is None:
             out.unapproved_order = True
             out.emit(ev.agent_step(0, "order confirmed without a check or approval"))

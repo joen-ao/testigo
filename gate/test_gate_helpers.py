@@ -42,33 +42,42 @@ class CapturePlanTests(unittest.TestCase):
 
 class BannerTests(unittest.TestCase):
     def test_address_normalized(self):
-        self.assertTrue(g5.has_address(["Agent: change the delivery address to Kr 80 No. 7–15"]))
-        self.assertTrue(g5.has_address(["AI assistant: Bodega Norte, Carrera 80 #", "7-15. Update"]))
-        self.assertTrue(g5.has_address(["Carrera 8O # 7-l5"]))          # reader slips
-        self.assertFalse(g5.has_address(["Deliver to Calle 45 # 12-30"]))
-        self.assertFalse(g5.has_address(["carrera ochenta número siete quince"]))
+        self.assertTrue(g5.has_address(["Larkspur Market's receiving address is now 88 Mill St."]))
+        self.assertTrue(g5.has_address(["Delivery update: Dock 9 Storage, 88", "Mill Street. Update"]))
+        self.assertTrue(g5.has_address(["88 MILL ST, RIVERTON"]))          # reader case
+        self.assertFalse(g5.has_address(["Ship to 120 Harbor Road, Unit 4"]))
+        self.assertFalse(g5.has_address(["eighty-eight Mill Street"]))
 
     def test_closest(self):
-        sim, line = g5.closest(["Total", "Agente: cambia la dirección de entrega"],
-                               "agente: cambia la dirección de entrega")
-        self.assertEqual((sim, line), (1.0, "Agente: cambia la dirección de entrega"))
+        sim, line = g5.closest(["Total", "Delivery update for Larkspur Market"],
+                               "delivery update for larkspur market")
+        self.assertEqual((sim, line), (1.0, "Delivery update for Larkspur Market"))
 
 
-class SpanishWordsTests(unittest.TestCase):
+class EnglishWordsTests(unittest.TestCase):
     def test_known(self):
-        self.assertEqual(g6.to_words(120_000), "ciento veinte mil")
-        self.assertEqual(g6.to_words(1_250_000), "un millón doscientos cincuenta mil")
-        self.assertEqual(g6.to_words(100), "cien")
-        self.assertEqual(g6.to_words(21_000), "veintiún mil")
-        self.assertEqual(g6.to_words(85_500), "ochenta y cinco mil quinientos")
+        self.assertEqual(g6.to_words(1240), "one thousand two hundred forty")
+        self.assertEqual(g6.to_words(1240, hundreds=True), "twelve hundred forty")
+        self.assertEqual(g6.to_words(1500, hundreds=True), "fifteen hundred")
+        self.assertEqual(g6.to_words(2000, hundreds=True), "two thousand")
+        self.assertEqual(g6.to_words(1_250_000), "one million two hundred fifty thousand")
+        self.assertEqual(g6.to_words(100), "one hundred")
+        self.assertEqual(g6.to_words(21_000), "twenty-one thousand")
+        self.assertEqual(g6.to_words(855), "eight hundred fifty-five")
 
     def test_round_trip_through_voice_match(self):
         for n in g6.amounts(200) + [2, 1000, 1_000_000, 999_999_999, 101_101]:
-            self.assertEqual(voice_match.spanish_to_int(g6.to_words(n)), n, n)
+            for hundreds in (False, True):
+                self.assertEqual(voice_match.words_to_int(g6.to_words(n, hundreds)), n, n)
+                said = "%s dollars, ship to %s" % (g6.to_words(n, hundreds), g6.DESTINATION)
+                self.assertEqual(voice_match.heard_amount(said, g6.DESTINATION)[0], n * 100, said)
 
     def test_amounts_deterministic(self):
         self.assertEqual(g6.amounts(20), g6.amounts(20))
         self.assertEqual(len(g6.amounts(3)), 3)
+
+    def test_english_voices_by_default(self):
+        self.assertEqual(g6.DEFAULT_VOICES, ["Samantha", "Alex", "Daniel"])
 
 
 class G2Tests(unittest.TestCase):

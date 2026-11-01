@@ -62,14 +62,14 @@ def build_bundle(scenario, out_dir, seed=None, policy_path=POLICY_PATH, key_path
 
     receipt = build_receipt(
         policy,
-        action_text="confirm order %s COP -> deliver to %s" % (
-            decision.approval_event["amount_cop"], decision.approval_event["address"]),
-        amount_cop=decision.approval_event["amount_cop"],
+        action_text="confirm order %s -> ship to %s" % (
+            decision.approval_event["amount_cents"], decision.approval_event["address"]),
+        amount_cents=decision.approval_event["amount_cents"],
         address_text=decision.approval_event["address"],
         approved_crops=approved_crops,
         executed_crops=executed_crops,
         approval={"method": "passkey",
-                  "voice_transcript": "ciento veinte mil pesos, entrega en Tienda Doña Marta"},
+                  "voice_transcript": "Twelve hundred forty dollars, ship to Larkspur Market"},
         seed=seed,
     )
 
@@ -93,7 +93,7 @@ def main():
     print("  id       ", receipt["id"])
     print("  policy   ", receipt["policy_sha256"][:12], "…")
     print("  signature", receipt["signature"][:24], "…")
-    print("  key       marta-shop (%s)" % keys.backend())
+    print("  key       larkspur-market (%s)" % keys.backend())
 
 
 if __name__ == "__main__":

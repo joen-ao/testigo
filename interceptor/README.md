@@ -6,7 +6,7 @@ click it runs `verify`. This folder is the **decision core** — pure, standard
 library only, no browser, model or network — so it is testable today and wires
 to Playwright / SAM 3.1 / Spark / FastAPI later without changing the rules.
 
-Everything is a simulation: fake supplier, shop and attacker address.
+Everything is a simulation: fake supplier, buyer warehouse and attacker address.
 
 ## Run
 
@@ -47,7 +47,7 @@ interceptor/
   test_engine.py unit tests
 ```
 
-The committed policy lives in `policy/marta.policy.yaml`; one signed live from
+The committed policy lives in `policy/larkspur.policy.yaml`; one signed live from
 view 1 goes to `runs/policy/active.policy.yaml` and wins while it exists
 (`common.config.policy_path()`, used by the service, the loop, the bench and
 `testigo verify`). Its sha256 is stamped in and is the same hash the receipt and

@@ -1,13 +1,15 @@
-"""Gate g6: Spanish spoken amounts, transcribed and parsed exactly and fast (F0 §13, D8).
+"""Gate g6: English spoken amounts, transcribed and parsed exactly and fast (F0 §13, D8).
 
-  .venv/bin/python -m gate.g6_voice_numeric [--n 20] [--voices Paulina Juan]
+  .venv/bin/python -m gate.g6_voice_numeric [--n 20] [--voices Samantha Alex Daniel]
 
-Synthesizes --n phrases "<amount in words> pesos, entrega en Tienda Doña Marta" with macOS
-`say` (the requested voices that exist here, alternating) as 16 kHz WAV,
+Synthesizes --n phrases "<amount in words> dollars, ship to Larkspur Market" with
+macOS `say` (the requested voices that exist here, alternating) as 16 kHz WAV,
 transcribes each with Voice Transcribe and parses the amount with
 approval.voice_match (the F7 code). "Exact" means the parsed amount equals the
-amount said. Latency is measured in the client, from sending the finished
-audio to receiving the text. Passes with >= 95% exact and a median < 1.5 s.
+amount said. Amounts are whole dollars, said in both English forms ("one
+thousand two hundred forty" and "twelve hundred forty"). Latency is measured
+in the client, from sending the finished audio to receiving the text. Passes
+with >= 95% exact and a median < 1.5 s.
 
 Without `say`/`afconvert`, or with none of the voices, the item is omitted
 (pass null). Audio stays in runs/gate/<date>/g6/ (never committed).
@@ -23,65 +25,70 @@ import subprocess
 from approval import voice_match
 from common import meta_client
 from gate.report import report, run_dir
+from gate.voices import ENGLISH_VOICES, installed_voices
 
-DESTINATION = "Tienda Doña Marta"
+DESTINATION = "Larkspur Market"
 EXACT_MIN = 0.95
 MEDIAN_MAX_MS = 1500
+DEFAULT_VOICES = list(ENGLISH_VOICES)
 
-_UNITS = ["", "un", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
-          "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho",
-          "diecinueve", "veinte", "veintiún", "veintidós", "veintitrés", "veinticuatro",
-          "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"]
-_TENS = {3: "treinta", 4: "cuarenta", 5: "cincuenta", 6: "sesenta", 7: "setenta",
-         8: "ochenta", 9: "noventa"}
-_HUNDREDS = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos",
-             "seiscientos", "setecientos", "ochocientos", "novecientos"]
+_UNITS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+          "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+          "eighteen", "nineteen"]
+_TENS = {2: "twenty", 3: "thirty", 4: "forty", 5: "fifty", 6: "sixty", 7: "seventy",
+         8: "eighty", 9: "ninety"}
+
+
+def _below_100(n):
+    if n < 20:
+        return _UNITS[n]
+    t, u = divmod(n, 10)
+    return _TENS[t] + ("-" + _UNITS[u] if u else "")
 
 
 def _below_1000(n):
-    if n == 100:
-        return "cien"
     h, rest = divmod(n, 100)
-    parts = [_HUNDREDS[h]] if h else []
-    if rest < 30:
-        parts.append(_UNITS[rest])
-    else:
-        t, u = divmod(rest, 10)
-        parts.append(_TENS[t] + (" y " + _UNITS[u] if u else ""))
-    return " ".join(p for p in parts if p)
+    parts = [_UNITS[h] + " hundred"] if h else []
+    if rest:
+        parts.append(_below_100(rest))
+    return " ".join(parts)
 
 
-def to_words(n):
-    """1 <= n <= 999,999,999 in Spanish words, as a person says an amount."""
+def to_words(n, hundreds=False):
+    """1 <= n <= 999,999,999 in English words, as a person says an amount.
+    hundreds=True says 1,100-9,999 (not a whole thousand) the short way:
+    1240 -> "twelve hundred forty" instead of "one thousand two hundred forty"."""
     if not 1 <= n <= 999_999_999:
         raise ValueError(n)
+    if hundreds and 1100 <= n <= 9999 and n % 1000 >= 100:
+        h, rest = divmod(n, 100)
+        return _below_100(h) + " hundred" + (" " + _below_100(rest) if rest else "")
     millions, rest = divmod(n, 1_000_000)
     thousands, units = divmod(rest, 1000)
     parts = []
     if millions:
-        parts.append("un millón" if millions == 1 else _below_1000(millions) + " millones")
+        parts.append(_below_1000(millions) + " million")
     if thousands:
-        parts.append("mil" if thousands == 1 else _below_1000(thousands) + " mil")
+        parts.append(_below_1000(thousands) + " thousand")
     if units:
         parts.append(_below_1000(units))
     return " ".join(parts)
 
 
 def amounts(n, seed=31):
-    """n amounts in COP like the portal's orders: round to the hundred, 1,000 to 5,000,000."""
+    """n whole-dollar amounts like the portal's orders: USD 10 to 50,000."""
     rng = random.Random(seed)
-    fixed = [120_000, 150_000, 1_250_000, 85_500, 999_900]
+    fixed = [1240, 1500, 12_500, 855, 9_999]
     out = fixed[:n]
     while len(out) < n:
-        out.append(rng.randrange(10, 50_000) * 100)
+        out.append(rng.randrange(10, 50_000))
     return out
 
 
 def available_voices(wanted):
     if not (shutil.which("say") and shutil.which("afconvert")):
         return []
-    listed = subprocess.run(["say", "-v", "?"], capture_output=True, text=True).stdout
-    names = {line.split("  ")[0].strip() for line in listed.splitlines()}
+    names = installed_voices()
     return [v for v in wanted if v in names]
 
 
@@ -96,7 +103,7 @@ def synth(text, voice, wav):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--n", type=int, default=20, help="phrases to synthesize (default 20)")
-    ap.add_argument("--voices", nargs="+", default=["Paulina", "Juan"])
+    ap.add_argument("--voices", nargs="+", default=DEFAULT_VOICES)
     args = ap.parse_args(argv)
 
     voices = available_voices(args.voices)
@@ -110,7 +117,7 @@ def main(argv=None):
     rows = []
     for i, amount in enumerate(amounts(args.n)):
         voice = voices[i % len(voices)]
-        said = "%s pesos, entrega en %s" % (to_words(amount), DESTINATION)
+        said = "%s dollars, ship to %s" % (to_words(amount, hundreds=i % 2 == 1), DESTINATION)
         wav = out_dir / ("clip_%02d.wav" % i)
         synth(said, voice, wav)
         try:
@@ -119,7 +126,8 @@ def main(argv=None):
             rows.append({"amount": amount, "said": said, "voice": voice, "error": str(e)[:200],
                          "exact": False, "latency_ms": None})
             continue
-        heard, why = voice_match.heard_amount(text, DESTINATION)
+        heard, why = voice_match.heard_amount(text, DESTINATION)     # cents
+        heard = None if heard is None else (heard // 100 if heard % 100 == 0 else heard / 100)
         rows.append({"amount": amount, "said": said, "voice": voice, "transcript": text,
                      "heard": heard, "why": why, "exact": heard == amount,
                      "latency_ms": ms, "audio_s": secs})

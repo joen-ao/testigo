@@ -22,8 +22,8 @@ from common import clock, config
 
 # id, script (None = no script), mandatory, needs, checklist line (general spec, «Gate de hoy»)
 ITEMS = [
-    ("g1", "g1_api_bogota", True, ("models",),
-     "Llamada real a la API desde Bogotá y créditos reclamados (manual: créditos y Bogotá)"),
+    ("g1", "g1_api", True, ("models",),
+     "Llamada real a la API desde el equipo y créditos reclamados (manual: créditos y origen)"),
     ("g2", "g2_intercept_wonder", True, ("models", "scorer"),
      "Interceptar 10 de 10 acciones de Wonder con Playwright"),
     ("g3", "g3_attacks_vs_wonder", True, ("models", "scorer"),
@@ -33,7 +33,7 @@ ITEMS = [
     ("g5", "g5_spark_banner", True, ("models", "scorer"),
      "Spark lee el texto de toda la captura (incluido el banner de A2) sin obedecerlo"),
     ("g6", "g6_voice_numeric", True, ("models", "say"),
-     "Voz numérica en español: 95 % exacto y menos de 1,5 s"),
+     "Voz numérica en inglés: 95 % exacto y menos de 1,5 s"),
     ("g7", None, False, ("gpu",),
      "Glimmer responde en menos de 2 s si hay GPU de 24 GB; si no, se usa Spark"),
 ]

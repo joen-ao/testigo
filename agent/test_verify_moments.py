@@ -8,7 +8,7 @@ Compared by the values read from the pixels, never by the DOM.
 import unittest
 
 from agent.agent import Agent
-from agent.driver import BrowserDriver, SHOP_ADDRESS, ATTACKER_ADDRESS
+from agent.driver import BrowserDriver, BUYER_ADDRESS, ATTACKER_ADDRESS
 from agent.loop import run
 from interceptor.channels import Capture, FixtureChannel
 from tests.fixtures import captures as fx
@@ -19,11 +19,11 @@ TEST_SEED = bytes(range(32))     # a throwaway test key, never the owner's
 
 class TwoStep(BrowserDriver):
     """Order page, review screen, result. `review_to` / `delivered_to`: the
-    "Deliver to" the review screen shows and the address the portal records."""
+    "Ship to" the review screen shows and the address the portal records."""
     is_test_double = True
     scenario, variant = "clean", 1
 
-    def __init__(self, review_to=fx.SHOP, delivered_to=SHOP_ADDRESS):
+    def __init__(self, review_to=fx.BUYER, delivered_to=BUYER_ADDRESS):
         self.review_to, self.delivered_to = review_to, delivered_to
         self.page = ORDER
         self.ran = []
@@ -50,7 +50,7 @@ class TwoStep(BrowserDriver):
         if self.page == ORDER:
             self.page = REVIEW
         elif self.page == REVIEW:
-            self._order = {"address": self.delivered_to, "amount_cop": 120000}
+            self._order = {"address": self.delivered_to, "amount_cents": 124000}
 
     @property
     def last_order(self):
@@ -75,12 +75,12 @@ class MomentsTests(unittest.TestCase):
         out = run(drv, Confirm(), signing_key=TEST_SEED)
         self.assertEqual(verifies(out), [("review", "match"), ("result", "match")])
         self.assertFalse(out.blocked or out.receipt_flagged)
-        self.assertEqual(out.order["address"], SHOP_ADDRESS)
+        self.assertEqual(out.order["address"], BUYER_ADDRESS)
         self.assertEqual(out.receipt["comparison"]["status"], "match")
         self.assertEqual(out.receipt["comparison"]["by"], "read")
 
     def test_address_changed_on_review_blocks_before_confirm(self):
-        drv = TwoStep(review_to="Tienda Doña Marta · " + ATTACKER_ADDRESS, delivered_to=ATTACKER_ADDRESS)
+        drv = TwoStep(review_to="Larkspur Market · " + ATTACKER_ADDRESS, delivered_to=ATTACKER_ADDRESS)
         out = run(drv, Confirm(), signing_key=TEST_SEED)
         self.assertEqual(verifies(out), [("review", "mismatch")])
         self.assertTrue(out.blocked)
@@ -100,7 +100,7 @@ class MomentsTests(unittest.TestCase):
 
     def test_formatting_differences_are_not_a_mismatch(self):
         # the review screen shows the address in another layout, case and abbreviation
-        drv = TwoStep(review_to="DELIVER TO Cl. 45 No. 12–30, BOGOTÁ Tienda Doña Marta")
+        drv = TwoStep(review_to="SHIP TO l20 HARBOR RD., UNIT 4, RIVERTON Larkspur Market")
         out = run(drv, Confirm(), signing_key=TEST_SEED)
         self.assertEqual(verifies(out)[0], ("review", "match"))
 
@@ -113,7 +113,7 @@ class ReviewFindingsTests(unittest.TestCase):
     """Code review of F8 (31 Oct)."""
 
     def test_blocked_at_review_leaves_a_signed_blocked_receipt(self):
-        drv = TwoStep(review_to="Tienda Doña Marta · " + ATTACKER_ADDRESS, delivered_to=ATTACKER_ADDRESS)
+        drv = TwoStep(review_to="Larkspur Market · " + ATTACKER_ADDRESS, delivered_to=ATTACKER_ADDRESS)
         out = run(drv, Confirm(), signing_key=TEST_SEED)
         self.assertEqual((out.receipt["status"], out.receipt["blocked_at"]), ("blocked", "review"))
         self.assertIsNone(out.receipt["executed"])

@@ -6,6 +6,8 @@ Concreta la fila F9 del spec general: cada acción supervisada deja un recibo fi
 
 > **1 nov (R2):** el recibo antes registraba un pago a una cuenta; ahora registra un pedido y su dirección de entrega (recortes `amount` y `address`, `03-revision-31-oct.md` §10).
 
+> Historia: antes el caso era una tienda en Bogotá (Doña Marta, pesos colombianos); desde el 1 nov es el escenario global de `04-escenario-global.md`.
+
 ## Decisiones pendientes
 
 | ID | Tema | Propuesta de este spec | Bloquea |
@@ -40,27 +42,27 @@ Fuera de alcance de F9: capturar, segmentar, comparar o decidir. F9 recibe los h
 
 ## 3. El recibo
 
-Formato del spec 01, con `amount_cop` explícito y el campo de estado que resuelve F9-D4:
+Formato del spec 01, con `amount_cents` explícito y el campo de estado que resuelve F9-D4:
 
 ```json
 {"id": "rcpt_2041_7f3a", "time": "2026-10-28T09:16:05-05:00",
- "agent": "wonder@marta-shop",
- "action": "order DX-2041 COP 120,000 -> deliver to Tienda Doña Marta · Calle 45 # 12-30",
- "amount_cop": 120000,
- "address": "Tienda Doña Marta · Calle 45 # 12-30, Bogotá",
+ "agent": "wonder@larkspur-market",
+ "action": "order PO-2041 USD 1,240.00 -> ship to Larkspur Market · 120 Harbor Road, Unit 4",
+ "amount_cents": 124000,
+ "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton",
  "policy_sha256": "....",
  "approved": {"crop_amount": "....", "crop_address": "...."},
  "executed": {"crop_amount": "....", "crop_address": "...."},
  "status": "confirmed",
- "approval": {"method": "voice", "voice_transcript": "ciento veinte mil pesos, entrega en Tienda Doña Marta"},
- "signed_by": "voice:marta",
+ "approval": {"method": "voice", "voice_transcript": "Twelve hundred forty dollars, ship to Larkspur Market"},
+ "signed_by": "voice:larkspur",
  "pubkey": "....",
  "signature": "ed25519:...."}
 ```
 
 - `status` es `confirmed` (el pedido se confirmó) o `blocked` (nunca se confirmó). Si es `blocked`, `executed` es `null` y se agrega `"blocked_at": "review"` o `"result"` (F9-D4).
 - `pubkey` es la llave pública del firmante, en hexadecimal. Está por comodidad; la confianza viene de fijarla aparte (sección 5).
-- La hora sale del reloj de Bogotá real (`common/clock.py`), no de una hora local con el huso pegado (hueco de F0 que F9 ya cumple al usar `common`).
+- La hora sale del reloj real con huso fijo (`common/clock.py`), no de una hora local con el huso pegado (hueco de F0 que F9 ya cumple al usar `common`).
 - Los hashes son los mismos `sha256` que calculó el canal de píxeles sobre los PNG de los recortes: el número del recibo es el número que se comprobó.
 
 **Qué firma la firma.** La firma Ed25519 cubre el recibo canónico: todos los campos menos `signature`, serializados de forma estable. Incluye `pubkey`, así que no se puede re-apuntar el recibo a otra llave sin volver a firmarlo.
@@ -122,7 +124,7 @@ F9 en sí no llama a ningún modelo. El recibo del video sale de una corrida rea
 | Archivo | Se conserva | Cambia | Sale |
 | --- | --- | --- | --- |
 | `receipts/keys.py` | Entero: keygen, firmar, verificar con `cryptography`; llave en `.secrets/` | — | — |
-| `receipts/receipt.py` | La serialización canónica, la firma y la verificación de firma | Campos del spec 01 (`crop_amount`, `crop_address`); agregar `status`, `amount_cop`, `blocked_at`; la hora desde `common/clock.py` | — |
+| `receipts/receipt.py` | La serialización canónica, la firma y la verificación de firma | Campos del spec 01 (`crop_amount`, `crop_address`); agregar `status`, `amount_cents`, `blocked_at`; la hora desde `common/clock.py` | — |
 | `receipts/verify.py` | Las cuatro comprobaciones y el objeto de resultado | El paso 4 respeta `status: blocked` (no inventa un ejecutado) | — |
 | `receipts/cli.py` | `verify` y `keygen`, la salida de cuatro pasos, el comando `testigo` | — | — |
 | `receipts/test_receipts.py` | Las 11 pruebas | Adaptarlas a los campos nuevos y agregar el caso `blocked` | — |

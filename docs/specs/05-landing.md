@@ -43,3 +43,9 @@ En 20 segundos de scroll, cualquier persona entiende: (1) una página puede darl
 - La sección 3 deja ver la línea escondida y la pintada sin leer ningún párrafo.
 - Ninguna cifra inventada: los resultados son marcadores hasta la corrida nueva; en la app se leen de `/api/bench`.
 - La app (`ui/`) porta este diseño en la ruta `#/` cuando esté aprobado.
+
+## Dirección elegida (1 nov)
+
+El equipo eligió la **opción A («Forense»)** entre tres direcciones dibujadas en Claude Design, con una paleta de más confianza: fondo tinta `#0D1117`, papel cálido `#F4F1EA`, acento verde azulado de «verificado» `#3CC9A9` (`#0E7C66` sobre claro), cajas de SAM en cobalto `#3B6FD4` y ámbar `#F0B254` para «retenido»; sin rojo de alarma. Tipografía: Instrument Serif (titulares), Inter Tight (cuerpo), JetBrains Mono (evidencia, código, recibo).
+
+Estructura de página de servicio: barra con «Talk to us» y «Try the live demo»; héroe con la captura como evidencia; **demo en video** (segunda sección, se hace con HyperFrames cuando el rediseño del producto esté completo; hoy es un marcador con capítulos); el problema en tres «exhibits»; cómo funciona en cuatro pasos (firmar, atestiguar, confirmar, probar); capacidades; verificación del recibo; resultados de WitnessBench (marcadores hasta la nueva corrida); preguntas y límites medidos; cierre con llamada a la acción. Diseño: https://claude.ai/artifact/JCD7qEFWBLFQ8mXchcdSSh (tablero «Landing · A, trusted palette»).

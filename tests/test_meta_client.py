@@ -34,7 +34,7 @@ def response(text, usage):
             "parallel_tool_calls": True, "tool_choice": "auto", "tools": [], "usage": usage}
 
 
-TRANSCRIPT = {"sessionId": "s1", "transcript": "ciento veinte mil pesos", "audioDurationMs": 3040, "turns": []}
+TRANSCRIPT = {"sessionId": "s1", "transcript": "twelve hundred forty dollars", "audioDurationMs": 3040, "turns": []}
 
 
 class FakeAPI(BaseHTTPRequestHandler):
@@ -54,7 +54,7 @@ class FakeAPI(BaseHTTPRequestHandler):
         elif self.path.endswith("/responses"):
             req = json.loads(raw)
             ok = (response(SAM_TEXT, None) if req["model"] == "fake-sam" else
-                  response("COP 120,000", {"input_tokens": 1_000_000, "output_tokens": 0,
+                  response("USD 1,240.00", {"input_tokens": 1_000_000, "output_tokens": 0,
                                            "total_tokens": 1_000_000}))
         else:
             ok = COMPLETION
@@ -163,7 +163,7 @@ class MetaClientTests(unittest.TestCase):
         clip = Path(self.tmp, "clip.wav")
         clip.write_bytes(b"RIFF fake wav")
         text, _, secs = self.client().transcribe(clip)
-        self.assertEqual((text, secs), ("ciento veinte mil pesos", 3.04))
+        self.assertEqual((text, secs), ("twelve hundred forty dollars", 3.04))
         path, ctype, body = FakeAPI.last
         self.assertEqual(path, "/v1/asr/transcribe")
         self.assertTrue(ctype.startswith("multipart/form-data; boundary="))

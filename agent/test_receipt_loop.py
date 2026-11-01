@@ -70,7 +70,7 @@ class LoopReceiptTests(unittest.TestCase):
     def test_tampered_receipt_fails_signature(self):
         out = run_fixture("clean", run_dir=self.dir, signing_key=self.seed)
         r = json.loads(out.receipt_path.read_text())
-        r["address"] = "Bodega Norte · Carrera 80 # 7-15, Bogotá"
+        r["address"] = "Dock 9 Storage · 88 Mill Street, Riverton"
         out.receipt_path.write_text(json.dumps(r))
         res = verify_receipt(str(out.receipt_path), evidence_dir=str(self.dir), policy_path=POLICY)
         self.assertEqual(res.first_failure.n, 2)

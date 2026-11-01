@@ -1,120 +1,98 @@
-"""Colombian street addresses as a reader may return them, in one canonical form.
+"""Street addresses (English format) as a reader may return them, in one canonical form.
 
-The protected field of an order is its delivery address (R2, 1 Nov). What the
-pixels read for it, what the policy allows and what the portal recorded are
-compared in this form, so the labels around it ("DELIVER TO", "Entrega en"),
-the city, the spacing, the case and the reader's small slips do not count:
+The protected field of an order is its delivery address (R2; global scenario,
+04). What the pixels read for it, what the policy allows and what the portal
+recorded are compared in this form, so the labels around it ("SHIP TO"), the
+city, the spacing, the case and the reader's small slips do not count:
 
-  street type   calle | carrera | avenida | diagonal | transversal, also as
-                Cl, Cll, Cra, Kr, Kra, Cr, Av, Avda, Dg, Diag, Tv, Tr, Transv
-                (with or without a dot, any case)
-  numbers       1-3 ASCII digits per group; I, l and O misread for 1, 1 and 0
-                are accepted in digit places (a group must still hold a real
-                digit). Each group keeps its letter and "bis" suffixes:
-                "45A", "45 A", "45 Bis", "45 Bis B" (the last group: "30A",
-                "30 Bis")
-  quadrant      "Sur", "Este", "Norte", "Oeste" after the first number
-                ("Calle 45 Sur # 12-30") or after the address; both give the
-                same canonical form
-  separator     "#", "No.", "No", "N°", "Nº", "Nro.", "número"/"numero", or
-                nothing at all
-  dash          "-", en dash, em dash (spaces around it allowed); after an
-                explicit separator a plain space also works ("# 7 15")
+  number        1-5 ASCII digits; I, l and O misread for 1, 1 and 0 are
+                accepted (the number must still hold a real digit); leading
+                zeros do not count; an attached letter is kept ("120A")
+  directional   North/N, South/S, East/E, West/W (with or without a dot)
+                before the street name or after the street type; spelled out
+                in the canonical form ("120 N Harbor Rd" -> "120 north harbor
+                road"). Before and after are different addresses
+  street name   1-3 words of ASCII letters (or an ordinal such as "5th")
+  street type   road | street | avenue | boulevard | lane | drive, also as
+                Rd, St, Ave, Blvd, Ln, Dr (with or without a dot, any case);
+                a full stop after a full type ("Street.") ends the address
 
-What follows the address and names a place is part of it (review of cebf0f4:
-"Calle 45 # 12-30 Sur", "..., Medellín", "..., Bogotá Soacha", "... Int. 2"
-are other addresses): up to four words after it, up to a punctuation mark
-other than "," and ".", or the next address, taking a quadrant, a complement
-word with the word after it ("Int. 2", "Apto 301", "Torre B") and capitalized
-words (a locality: "Medellín", "Soacha"). The first lower-case word of any
-other kind ends it, so the sentence an address sits in ("... to Carrera 80 #
-7-15 and confirm", "... #7-15 instead") is not read as part of it. The city
-"Bogotá"/"Bogota" and "D.C." are dropped, and so is the shop's name when it is
-exactly all that is left (the portal shows the delivery point's name right
-after the address field: "Calle 45 # 12-30, Bogotá Tienda Doña Marta").
+What follows the address and names a place is part of it (same principle as
+the review of cebf0f4: any real difference is another address): up to four
+words after it, up to a punctuation mark other than "," and ".", or the next
+address, taking a complement word with the word after it ("Unit 4",
+"Suite B", "Apt 2", "Bldg C", "Dock 9"), a directional and capitalized words
+(another city: "Springfield"). The first lower-case word of any other kind
+ends it, so the sentence an address sits in ("... to 88 Mill Street and
+confirm", "... 88 Mill St instead") is not read as part of it. The city
+"Riverton" is dropped, and so is the buyer's name when it is exactly all that
+is left (the portal shows the delivery point's name right after the address
+field: "120 Harbor Road, Unit 4, Riverton Larkspur Market").
 
 `canonical_addresses(text)` gives every address in the text as
-"calle 45 # 12-30" / "calle 45a bis # 12-30 sur", sorted and without
-duplicates. Standard library only, so the portal can use it too. ui/app.js
-ports these rules (tests/test_ui.py checks both agree).
+"120 harbor road unit 4" / "88 mill street", sorted and without duplicates.
+Standard library only, so the portal can use it too. ui/app.js ports these
+rules (tests/test_ui.py checks both agree).
 """
 
 import re
 import unicodedata
 
-from common.config import SHOP
+from common.config import BUYER
 
 STREET_TYPES = {
-    "calle": "calle", "cll": "calle", "cl": "calle",
-    "carrera": "carrera", "cra": "carrera", "kra": "carrera", "kr": "carrera", "cr": "carrera",
-    "avenida": "avenida", "avda": "avenida", "av": "avenida",
-    "diagonal": "diagonal", "diag": "diagonal", "dg": "diagonal",
-    "transversal": "transversal", "transv": "transversal", "tv": "transversal",
-    "tr": "transversal",
+    "road": "road", "rd": "road",
+    "street": "street", "st": "street",
+    "avenue": "avenue", "ave": "avenue",
+    "boulevard": "boulevard", "blvd": "boulevard",
+    "lane": "lane", "ln": "lane",
+    "drive": "drive", "dr": "drive",
 }
-
-QUADRANTS = ("sur", "este", "norte", "oeste")
+DIRECTIONALS = {"north": "north", "n": "north", "south": "south", "s": "south",
+                "east": "east", "e": "east", "west": "west", "w": "west"}
+# Complement words: they and the word after them belong to the address.
+COMPLEMENTS = {"unit": "unit", "suite": "suite", "ste": "suite", "apt": "apt",
+               "apartment": "apt", "bldg": "bldg", "building": "bldg", "dock": "dock"}
 # The city of every address in the demo: dropped from the canonical form.
-CITY_WORDS = frozenset({"bogota", "dc"})
+CITY_WORDS = frozenset({"riverton"})
 # The portal shows the delivery point's name right after the address field;
 # exactly that name (and nothing more) after an address is not part of it.
-SHOP_NAME = SHOP["name"]
+BUYER_NAME = BUYER["name"]
 TAIL_MAX = 4
-# Complement words: they and the word after them belong to the address.
-COMPLEMENTS = frozenset({"int", "interior", "apto", "apartamento", "apt", "ap", "torre",
-                         "bloque", "bl", "casa", "local", "piso", "of", "oficina",
-                         "etapa", "manzana", "mz", "lote", "conjunto"})
 
-# Longest first, so "cra" is not read as "cr" + "a".
-_STREET = "|".join(sorted(STREET_TYPES, key=len, reverse=True))
-# A digit group: 1-3 characters of ASCII digits or I/l/O, at least one a real digit.
-_NUM = r"(?=[0-9IlO]{0,2}[0-9])[0-9IlO]{1,3}"
-_LET = r"[A-Za-z](?!\w)"
-_BIS = r"(?ai:bis)(?!\w)"
+# Longest first, so "street" is not read as "st" + "reet".
+_TYPE = "|".join(sorted(STREET_TYPES, key=len, reverse=True))
+_DIR = "|".join(sorted(DIRECTIONALS, key=len, reverse=True))
+# The house number: 1-5 characters of ASCII digits or I/l/O, at least one a real digit.
+_NUM = r"(?=[0-9IlO]{0,4}[0-9])[0-9IlO]{1,5}"
+_WORD = r"(?:[A-Za-z][A-Za-z'\-]*|[0-9]{1,3}(?ai:st|nd|rd|th))(?![0-9A-Za-z])"
 # ASCII-only case folding ("(?ai:"): Python's Unicode folding would also take
 # "ſ" for "s" and "K" (Kelvin) for "k", which ui/app.js does not.
-_SEP = r"(?:#|(?ai:n)[oOº°]\.?|(?ai:n)\.\s?[oOº°]|(?ai:nro)\.?|(?ai:n)[uUúÚ](?ai:mero))"
-_DASH = r"[\-–—]"
-
-
-def _group(k, last=False):
-    if last:      # the last group: a letter only when attached ("30A")
-        suffix = r"(?:%s)?(?:\s*%s)?" % (_LET, _BIS)
-    else:
-        suffix = r"(?:\s?%s)?(?:\s*%s(?:\s?%s)?)?" % (_LET, _BIS, _LET)
-    return r"(?P<n%s>%s)(?P<s%s>%s)(?!\w)" % (k, _NUM, k, suffix)
-
-
 ADDRESS_RE = re.compile(
-    r"(?<!\w)(?P<street>(?ai:%s))\.?\s*%s(?:\s+(?P<quad>(?ai:%s))(?!\w))?\s*"
-    r"(?:(?:%s\s*)?%s\s*%s\s*%s|%s\s*%s\s+%s)(?![.,][0-9])"
-    % (_STREET, _group(1), "|".join(QUADRANTS),
-       _SEP, _group("2a"), _DASH, _group("3a", True),
-       _SEP, _group("2b"), _group("3b", True)))
+    r"(?<![\w.,$#\-])(?P<num>%s)(?P<sfx>[A-Za-z])?(?!\w)"
+    r"\s+(?:(?P<pre>(?ai:%s))(?!\w)\.?\s+)?"
+    r"(?P<name>%s(?:\s+%s){0,2}?)"
+    r"\s+(?P<type>(?ai:%s))(?!\w)(?P<dot>\.)?"
+    % (_NUM, _DIR, _WORD, _WORD, _TYPE))
 
 _OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "O": "0"})
 
 
 def fold(text):
     """Text compared regardless of Unicode form, accents, case and spacing:
-    "Tienda Dona Marta" == "Tienda Doña Marta" (NFC or NFD)."""
+    "LARKSPUR  market" == "Larkspur Market"."""
     text = unicodedata.normalize("NFKD", str(text or ""))
     text = "".join(c for c in text if unicodedata.category(c) != "Mn")
     return " ".join(text.lower().split())
 
 
-_SHOP_WORDS = [w.replace(".", "") for w in fold(SHOP_NAME).split()]
+# Words that may carry an abbreviation dot without ending the sentence ("Ste. B").
+_ABBREVIATIONS = frozenset(COMPLEMENTS) | frozenset(DIRECTIONALS)
+_BUYER_WORDS = [w.replace(".", "") for w in fold(BUYER_NAME).split()]
 
 
 def _digits(group):
     return group.translate(_OCR_DIGITS).lstrip("0") or "0"
-
-
-def _number(num, suffix):
-    """"45" + " a bis b" -> "45a bis b"."""
-    s = re.sub(r"\s+", "", suffix or "").lower()
-    head, bis, after = s.partition("bis")
-    return _digits(num) + head + (" bis" if bis else "") + (" " + after if after else "")
 
 
 def _is_word_start(c):
@@ -124,7 +102,8 @@ def _is_word_start(c):
 def _segment(text, i):
     """The words after an address at text[i:], up to a punctuation mark other
     than "," and ".", the next address, or the end, as (folded without dots,
-    capitalized in the text)."""
+    capitalized in the text). A word ending in "." ends the segment, unless it
+    is a complement or a directional ("Ste.", "N.")."""
     words, n = [], len(text)
     while True:
         while i < n and (text[i].isspace() or text[i] == ","):
@@ -134,7 +113,10 @@ def _segment(text, i):
         j = i
         while j < n and (_is_word_start(text[j]) or text[j] == "."):
             j += 1
-        words.append((fold(text[i:j]).replace(".", ""), text[i].isupper()))
+        word = fold(text[i:j]).replace(".", "")
+        words.append((word, text[i].isupper()))
+        if text[j - 1] == "." and word not in _ABBREVIATIONS:
+            return words                 # a full stop ends the sentence ("Unit 4. Next")
         i = j
 
 
@@ -145,14 +127,19 @@ def _tail(text, i):
     k = 0
     while k < len(words) and len(out) < TAIL_MAX:
         word, capital = segment[k]
-        if words[k:] == _SHOP_WORDS:
+        if words[k:] == _BUYER_WORDS:
             break
         if word in CITY_WORDS:
             pass
         elif word in COMPLEMENTS:
-            out += words[k:k + 2]
+            out.append(COMPLEMENTS[word])
+            if k + 1 < len(words):
+                nxt = words[k + 1]
+                out.append(_digits(nxt) if nxt.isdigit() else nxt)
             k += 1
-        elif word in QUADRANTS or capital:
+        elif word in DIRECTIONALS:
+            out.append(DIRECTIONALS[word])
+        elif capital:
             out.append(word)
         else:
             break
@@ -161,16 +148,19 @@ def _tail(text, i):
 
 
 def canonical_addresses(text):
-    """Every address in `text`, canonical ("carrera 80 # 7-15"), sorted, unique."""
+    """Every address in `text`, canonical ("88 mill street"), sorted, unique."""
     text = unicodedata.normalize("NFC", str(text or ""))
     found = set()
     for m in ADDRESS_RE.finditer(text):
-        k = "a" if m.group("n2a") else "b"
-        tail = ([m.group("quad").lower()] if m.group("quad") else []) + _tail(text, m.end())
-        found.add(" ".join(["%s %s # %s-%s" % (
-            STREET_TYPES[m.group("street").lower()], _number(m.group("n1"), m.group("s1")),
-            _number(m.group("n2" + k), m.group("s2" + k)),
-            _number(m.group("n3" + k), m.group("s3" + k)))] + tail))
+        head = [_digits(m.group("num")) + (m.group("sfx") or "").lower()]
+        if m.group("pre"):
+            head.append(DIRECTIONALS[m.group("pre").lower()])
+        head += m.group("name").lower().split()
+        street = m.group("type").lower()
+        head.append(STREET_TYPES[street])
+        # "Street." ends the sentence; "St." is an abbreviation ("St., Unit 4")
+        ends = m.group("dot") and STREET_TYPES[street] == street
+        found.add(" ".join(head + ([] if ends else _tail(text, m.end()))))
     return sorted(found)
 
 
@@ -187,5 +177,5 @@ def norm_address(text):
 
 def squash(text):
     """Letters and ASCII digits only, accents folded, lower case:
-    "Carrera 80 # 7-15" -> "carrera80715"."""
+    "88 Mill Street" -> "88millstreet"."""
     return re.sub(r"[^a-z0-9]+", "", fold(text))

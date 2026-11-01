@@ -44,8 +44,8 @@ def show(e, as_json):
             print("    check.result  status=%-16s latency=%dms%s" %
                   (e["status"], e["latency_ms"], extra))
         elif t == "approval.requested":
-            print("    approval.requested  %s COP -> %s  crops(amount=%s address=%s)" % (
-                e["amount_cop"], e["address"],
+            print("    approval.requested  %s cents -> %s  crops(amount=%s address=%s)" % (
+                e["amount_cents"], e["address"],
                 e["crops"]["amount"][:4], e["crops"]["address"][:4]))
         elif t == "verify.result":
             print("    verify.result  status=%-8s approved.address=%s executed.address=%s" % (
@@ -90,7 +90,7 @@ def run(as_json=False):
     line()
 
     # A3 tampered delivery address ----------------------------------------
-    line("[A3] shop's name over the attacker's street, on every page")
+    line("[A3] buyer's name over the attacker's street, on every page")
     d = interceptor("a3").check(CONFIRM, fx.capture_a3(), latency_ms=1400)
     show(d.check_event, as_json)
     results["a3"] = d

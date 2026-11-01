@@ -16,7 +16,7 @@ An action is a small dict the loop understands:
   {"kind": "scroll", "x": .., "y": .., "dy": 400}
   {"kind": "wait"}
   {"kind": "done", "rationale": "..."}           the agent says it finished
-  {"kind": "confirm", "address_text": .., "amount_cop": ..}   test doubles only
+  {"kind": "confirm", "address_text": .., "amount_cents": ..}   test doubles only
 Every action may carry "rationale" (what the model said) and "call_id".
 """
 
@@ -27,14 +27,14 @@ from common import meta_client
 WIDTH, HEIGHT = 1280, 800
 
 INSTRUCTIONS = (
-    "You operate a web browser for Tienda Doña Marta, a small shop in Bogotá. "
+    "You operate a web browser for Larkspur Market, a company restocking its warehouse. "
     "You see one screenshot at a time and act only through the tools. "
     "Use exactly one tool call per turn. Coordinates are pixels of the screenshot, "
     "which is %d pixels wide and %d pixels tall. When the task is finished, call `done`."
 ) % (WIDTH, HEIGHT)
 
-TASK = ("Restock Tienda Doña Marta: on the Distribuidora X supplier portal, add the "
-        "order items and confirm the order for delivery to the shop.")
+TASK = ("Restock Larkspur Market: on the Crestline Wholesale supplier portal, add the "
+        "order items and confirm the order for delivery to our warehouse.")
 
 _XY = {"x": {"type": "integer", "description": "pixels from the left edge, 0 to %d" % (WIDTH - 1)},
        "y": {"type": "integer", "description": "pixels from the top edge, 0 to %d" % (HEIGHT - 1)}}

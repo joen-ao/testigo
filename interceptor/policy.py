@@ -1,9 +1,9 @@
-"""Policy: the compiled, signed output of Marta's spoken mandate (F1).
+"""Policy: the compiled, signed output of the company's spoken mandate (F1).
 
 The interceptor enforces this; the agent cannot change it. The policy ties the
 delivery destination by **name and address** (F1-D2): an order passes only if
-both appear in what the pixels read for "Deliver to", so changing the address
-while the shop's name stays visible does not slip through.
+both appear in what the pixels read for "Ship to", so changing the address
+while the buyer's name stays visible does not slip through.
 
 A policy's identity is the sha256 over its canonical content (every field
 except `sha256` and `signature`). An Ed25519 signature of the owner's key
@@ -30,7 +30,7 @@ class Policy:
 
         rules = _merge_rules(data.get("rules", []))
         self.deliver_only = _parse_deliver_only(rules.get("deliver_only", []))
-        self.max_per_order_cop = int(rules.get("max_per_order_cop", 0))
+        self.max_per_order_cents = int(rules.get("max_per_order_cents", 0))
         self.ask_before = rules.get("ask_before", "")
         self._raw = data
 
@@ -88,10 +88,10 @@ class Policy:
 
     def address_allowed(self, address_text):
         """Pass only if an allowed name appears AND the addresses read for
-        "Deliver to" are exactly its address (F1-D2): a crop that also shows
+        "Ship to" are exactly its address (F1-D2): a crop that also shows
         another address does not pass (review of F4). The name compares
-        regardless of Unicode form, accents, case and spacing ("Tienda Dona
-        Marta", an NFD "Doña")."""
+        regardless of Unicode form, accents, case and spacing ("LARKSPUR
+        MARKET", "Larkspur  Market")."""
         from common.address import fold
         from receipts.receipt import norm_read
         t = fold(address_text)
@@ -104,15 +104,16 @@ class Policy:
         from receipts.receipt import norm_read
         return {norm_read("address", p["address"]) for p in self.deliver_only}
 
-    def amount_allowed(self, amount_cop):
-        return 0 < int(amount_cop) <= self.max_per_order_cop
+    def amount_allowed(self, amount_cents):
+        """Integer cents, both sides."""
+        return 0 < int(amount_cents) <= self.max_per_order_cents
 
-    def check_order(self, address_text, amount_cop):
+    def check_order(self, address_text, amount_cents):
         """Return (ok, reason). reason is a short human string when not ok."""
         if not self.address_allowed(address_text):
             return False, "delivery address is not in the deliver-only list (%s)" % self.deliver_only_text()
-        if not self.amount_allowed(amount_cop):
-            return False, "amount %s exceeds max %s" % (amount_cop, self.max_per_order_cop)
+        if not self.amount_allowed(amount_cents):
+            return False, "amount %s exceeds max %s" % (amount_cents, self.max_per_order_cents)
         return True, ""
 
 
@@ -156,7 +157,7 @@ if __name__ == "__main__":
     p = load(sys.argv[1] if len(sys.argv) > 1 else policy_path())
     print("owner        :", p.owner)
     print("deliver_only :", p.deliver_only)
-    print("max_cop      :", p.max_per_order_cop)
+    print("max_cents    :", p.max_per_order_cents)
     print("ask_before   :", p.ask_before)
     print("sha256       :", p.sha256())
     print("short        :", p.short_sha())

@@ -10,21 +10,21 @@ from types import SimpleNamespace
 from interceptor.policy import Policy, load
 from policy import compile as pc
 from policy.compile import (MandateRefused, build_policy_dict, compile_mandate,
-                            parse_amount_cop, sign_policy_dict, to_yaml)
+                            parse_amount_cents, sign_policy_dict, to_yaml)
 from receipts import keys
 
 
 class CompileTests(unittest.TestCase):
     def setUp(self):
         self.d = build_policy_dict(
-            "Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido",
-            [{"name": "Tienda Doña Marta", "address": "Calle 45 # 12-30, Bogotá"}],
+            "Only ship to our warehouse, at most fifteen hundred dollars per order",
+            [{"name": "Larkspur Market", "address": "120 Harbor Road, Unit 4, Riverton"}],
             150000, "new_address")
 
     def test_build_shape(self):
         p = Policy(self.d)
-        self.assertEqual(p.deliver_only, [SHOP_RULE])
-        self.assertEqual(p.max_per_order_cop, 150000)
+        self.assertEqual(p.deliver_only, [BUYER_RULE])
+        self.assertEqual(p.max_per_order_cents, 150000)
         self.assertEqual(p.ask_before, "new_address")
 
     def test_sign_and_verify(self):
@@ -44,18 +44,18 @@ class CompileTests(unittest.TestCase):
 
     def test_address_binding_blocks_name_only_swap(self):
         p = Policy(self.d)
-        self.assertTrue(p.address_allowed("Tienda Doña Marta · Calle 45 # 12-30, Bogotá"))
-        self.assertTrue(p.address_allowed("DELIVER TO Tienda Doña Marta Cl. 45 No. 12–30"))
-        self.assertFalse(p.address_allowed("Tienda Doña Marta · Carrera 80 # 7-15, Bogotá"))
-        self.assertFalse(p.address_allowed("Bodega Norte · Calle 45 # 12-30, Bogotá"))
+        self.assertTrue(p.address_allowed("Larkspur Market · 120 Harbor Road, Unit 4, Riverton"))
+        self.assertTrue(p.address_allowed("SHIP TO Larkspur Market 120 Harbor Rd., Unit 4"))
+        self.assertFalse(p.address_allowed("Larkspur Market · 88 Mill Street, Riverton"))
+        self.assertFalse(p.address_allowed("Dock 9 Storage · 120 Harbor Road, Unit 4, Riverton"))
 
 
-PHRASE = "Solo pide con entrega en la tienda, máximo ciento cincuenta mil pesos por pedido"
-SHOP_RULE = {"name": "Tienda Doña Marta", "address": "Calle 45 # 12-30, Bogotá"}
-DIRECTORY = {"Tienda Doña Marta": "Calle 45 # 12-30, Bogotá"}
-GOOD = {"deliver_only": [{"name": "la tienda", "address": ""}],
-        "max_amount_words": "ciento cincuenta mil pesos",
-        "max_per_order_cop": 150000, "ask_before_new_address": False}
+PHRASE = "Only ship to our warehouse, at most fifteen hundred dollars per order"
+BUYER_RULE = {"name": "Larkspur Market", "address": "120 Harbor Road, Unit 4, Riverton"}
+DIRECTORY = {"Larkspur Market": "120 Harbor Road, Unit 4, Riverton"}
+GOOD = {"deliver_only": [{"name": "our warehouse", "address": ""}],
+        "max_amount_words": "fifteen hundred dollars",
+        "max_per_order_dollars": 1500, "ask_before_new_address": False}
 
 
 class FakeMeta:
@@ -66,7 +66,7 @@ class FakeMeta:
         self.transcript = transcript
         self.calls = []
 
-    def transcribe(self, audio_path, language="es"):
+    def transcribe(self, audio_path, language="en"):
         self.calls.append(("transcribe", audio_path))
         return self.transcript, 900, 4.2
 
@@ -92,8 +92,8 @@ class MandateTests(unittest.TestCase):
         pol, info = compile_mandate(meta, audio_path="m.wav", directory=DIRECTORY)
         p = Policy(pol)
         self.assertEqual(p.transcript, PHRASE)
-        self.assertEqual(p.deliver_only, [SHOP_RULE])
-        self.assertEqual(p.max_per_order_cop, 150000)
+        self.assertEqual(p.deliver_only, [BUYER_RULE])
+        self.assertEqual(p.max_per_order_cents, 150000)
         self.assertEqual(p.ask_before, "new_address")
         self.assertFalse(info["ask_before_said"])
         # Spark is asked for a strict schema, low effort, room for reasoning tokens
@@ -107,15 +107,15 @@ class MandateTests(unittest.TestCase):
         self.assertIn(json.dumps(PHRASE, ensure_ascii=False), messages[-1]["content"])
 
     def test_same_rules_as_the_demo_policy_file(self):
-        pol, _ = self.compile(GOOD, directory=None)   # the real shop profile (config)
-        demo = load(Path(pc.__file__).with_name("marta.policy.yaml"))
+        pol, _ = self.compile(GOOD, directory=None)   # the real buyer profile (config)
+        demo = load(Path(pc.__file__).with_name("larkspur.policy.yaml"))
         p = Policy(pol)
         self.assertEqual(p.deliver_only, demo.deliver_only)
-        self.assertEqual(p.max_per_order_cop, demo.max_per_order_cop)
+        self.assertEqual(p.max_per_order_cents, demo.max_per_order_cents)
         self.assertEqual(p.ask_before, demo.ask_before)
-        self.assertTrue(p.check_order("Tienda Doña Marta · Calle 45 # 12-30, Bogotá", 120000)[0])
-        self.assertFalse(p.check_order("Tienda Doña Marta · Carrera 80 # 7-15, Bogotá", 120000)[0])
-        self.assertFalse(p.check_order("Tienda Doña Marta · Calle 45 # 12-30, Bogotá", 160000)[0])
+        self.assertTrue(p.check_order("Larkspur Market · 120 Harbor Road, Unit 4, Riverton", 124000)[0])
+        self.assertFalse(p.check_order("Larkspur Market · 88 Mill Street, Riverton", 124000)[0])
+        self.assertFalse(p.check_order("Larkspur Market · 120 Harbor Road, Unit 4, Riverton", 150001)[0])
 
     def test_schema_refusals(self):
         bad = [
@@ -124,13 +124,15 @@ class MandateTests(unittest.TestCase):
             json.dumps([GOOD]),
             with_(extra="deliver anywhere"),
             {k: v for k, v in GOOD.items() if k != "max_amount_words"},
-            with_(deliver_only="la tienda"),
-            with_(deliver_only=[{"name": "la tienda"}]),
-            with_(deliver_only=[{"name": "la tienda", "address": "", "note": "x"}]),
-            with_(deliver_only=[{"name": "la tienda", "address": "", "phone": ""}]),   # unknown key
-            with_(max_per_order_cop="150000"),
-            with_(max_per_order_cop=150000.0),
-            with_(max_per_order_cop=True),
+            with_(deliver_only="our warehouse"),
+            with_(deliver_only=[{"name": "our warehouse"}]),
+            with_(deliver_only=[{"name": "our warehouse", "address": "", "note": "x"}]),
+            with_(deliver_only=[{"name": "our warehouse", "address": "", "phone": ""}]),   # unknown key
+            with_(max_per_order_dollars="1500"),
+            with_(max_per_order_dollars=1500.0),
+            with_(max_per_order_dollars=True),
+            {**{k: v for k, v in GOOD.items() if k != "max_per_order_dollars"},
+             "max_per_order_cents": 150000},                  # the old key is off-schema
             with_(ask_before_new_address="yes"),
             with_(deliver_only=[]),
         ]
@@ -139,92 +141,102 @@ class MandateTests(unittest.TestCase):
                 with self.assertRaises(MandateRefused):
                     self.compile(extraction)
 
-    def test_shop_named_in_full_compiles_the_same(self):
-        t = ("Solo pide con entrega en Tienda Doña Marta, máximo ciento cincuenta mil pesos "
-             "por pedido")
-        for name in ("Tienda Doña Marta", "tienda dona marta"):
+    def test_buyer_named_in_full_compiles_the_same(self):
+        t = "Only ship to Larkspur Market, at most fifteen hundred dollars per order"
+        for name in ("Larkspur Market", "LARKSPUR market"):
             pol, _ = self.compile(with_(deliver_only=[{"name": name, "address": ""}]), t)
-            self.assertEqual(Policy(pol).deliver_only, [SHOP_RULE])
-        t2 = "Pide solo para mi tienda, hasta 150.000 pesos por pedido"
-        pol, _ = self.compile(with_(deliver_only=[{"name": "mi tienda", "address": ""}],
-                                    max_amount_words="150.000 pesos"), t2)
-        self.assertEqual(Policy(pol).deliver_only, [SHOP_RULE])
+            self.assertEqual(Policy(pol).deliver_only, [BUYER_RULE])
+        t2 = "Order only for the warehouse, up to $1,500 per order"
+        pol, _ = self.compile(with_(deliver_only=[{"name": "the warehouse", "address": ""}],
+                                    max_amount_words="$1,500"), t2)
+        self.assertEqual(Policy(pol).deliver_only, [BUYER_RULE])
+        self.assertEqual(Policy(pol).max_per_order_cents, 150000)
 
     def test_unknown_destination_refused(self):
-        t = "Solo pide con entrega en Bodega Norte, máximo ciento cincuenta mil pesos por pedido"
+        t = "Only ship to Dock 9 Storage, at most fifteen hundred dollars per order"
         with self.assertRaises(MandateRefused) as cm:
-            self.compile(with_(deliver_only=[{"name": "Bodega Norte",
-                                              "address": "Carrera 80 # 7-15"}]), t)
-        self.assertIn("shop profile", str(cm.exception))
+            self.compile(with_(deliver_only=[{"name": "Dock 9 Storage",
+                                              "address": "88 Mill Street"}]), t)
+        self.assertIn("buyer profile", str(cm.exception))
 
     def test_destination_not_said_refused(self):
         # Spark may not add a destination the owner did not name
         with self.assertRaises(MandateRefused):
-            self.compile(with_(deliver_only=[{"name": "la tienda", "address": ""},
-                                             {"name": "Bodega Norte", "address": ""}]),
-                         directory={**DIRECTORY, "Bodega Norte": "Carrera 80 # 7-15, Bogotá"})
+            self.compile(with_(deliver_only=[{"name": "our warehouse", "address": ""},
+                                             {"name": "Dock 9 Storage", "address": ""}]),
+                         directory={**DIRECTORY, "Dock 9 Storage": "88 Mill Street, Riverton"})
 
     def test_address_bound_by_name(self):
         # a spoken address that matches is accepted (formatting aside); the stored one is the profile's
-        t = ("Solo pide con entrega en la tienda, Calle 45 No. 12-30, "
-             "máximo ciento cincuenta mil pesos por pedido")
-        pol, _ = self.compile(with_(deliver_only=[{"name": "la tienda",
-                                                   "address": "Cl 45 No. 12-30"}]), t)
-        self.assertEqual(Policy(pol).deliver_only, [SHOP_RULE])
-        # a different spoken address for the shop is refused
-        with self.assertRaises(MandateRefused):
-            self.compile(with_(deliver_only=[{"name": "la tienda",
-                                              "address": "Carrera 80 # 7-15"}]))
+        t = ("Only ship to our warehouse, 120 Harbor Rd, Unit 4, "
+             "at most fifteen hundred dollars per order")
+        pol, _ = self.compile(with_(deliver_only=[{"name": "our warehouse",
+                                                   "address": "120 Harbor Rd, Unit 4"}]), t)
+        self.assertEqual(Policy(pol).deliver_only, [BUYER_RULE])
+        # a different spoken address for the buyer is refused
+        for other in ("88 Mill Street", "120 Harbor Road, Unit 5", "120 Harbor Road"):
+            with self.assertRaises(MandateRefused, msg=other):
+                self.compile(with_(deliver_only=[{"name": "our warehouse", "address": other}]))
 
     def test_address_never_comes_from_speech(self):
         # the extraction carries no address: the policy still binds the profile's address
         pol, _ = self.compile(GOOD)
-        self.assertEqual(Policy(pol).deliver_only[0]["address"], "Calle 45 # 12-30, Bogotá")
+        self.assertEqual(Policy(pol).deliver_only[0]["address"], "120 Harbor Road, Unit 4, Riverton")
 
     def test_amount_is_reparsed_from_the_words(self):
         with self.assertRaises(MandateRefused):                 # Spark's integer disagrees
-            self.compile(with_(max_per_order_cop=1500000))
+            self.compile(with_(max_per_order_dollars=15000))
+        with self.assertRaises(MandateRefused):                 # cents are not dollars
+            self.compile(with_(max_per_order_dollars=150000))
         with self.assertRaises(MandateRefused):                 # words not in the transcript
-            self.compile(with_(max_amount_words="doscientos mil pesos", max_per_order_cop=200000))
+            self.compile(with_(max_amount_words="two thousand dollars", max_per_order_dollars=2000))
         with self.assertRaises(MandateRefused):                 # no amount said
-            self.compile(with_(max_amount_words="", max_per_order_cop=0))
-        t = "Solo pide con entrega en la tienda, máximo 150.000 pesos por pedido"
-        pol, _ = self.compile(with_(max_amount_words="150.000 pesos"), t)
-        self.assertEqual(Policy(pol).max_per_order_cop, 150000)
+            self.compile(with_(max_amount_words="", max_per_order_dollars=0))
+        t = "Only ship to our warehouse, at most $1,500 per order"
+        pol, _ = self.compile(with_(max_amount_words="$1,500"), t)
+        self.assertEqual(Policy(pol).max_per_order_cents, 150000)
 
-    def test_parse_amount_cop(self):
-        cases = {"ciento cincuenta mil pesos": 150000, "150 mil": 150000, "150.000": 150000,
-                 "$150,000 COP": 150000, "doscientos treinta y cinco mil": 235000,
-                 "noventa y nueve mil novecientos": 99900, "pesos": None,
-                 "150 000 pesos": 150000, "un millón de pesos": None, "dos millones": None}
+    def test_parse_amount_cents(self):
+        cases = {"fifteen hundred dollars": 150000, "one thousand five hundred": 150000,
+                 "1,500": 150000, "$1,500": 150000, "1500.00 dollars": 150000,
+                 "two thousand three hundred fifty": 235000, "nine hundred ninety nine": 99900,
+                 "dollars": None, "1 500 dollars": 150000, "one million dollars": None,
+                 "two million": None, "1,000,000 dollars": None, "$1,500.50": None}
         for text, want in cases.items():
             with self.subTest(text=text):
-                self.assertEqual(parse_amount_cop(text), want)
+                self.assertEqual(parse_amount_cents(text), want)
 
     def test_amount_must_be_said_as_a_maximum(self):
         # review F1-2: a number said for another reason is not the ceiling
-        t = ("Solo pide con entrega en la tienda, máximo cincuenta mil pesos por pedido; "
-             "el pedido de hoy es de 900 mil")
+        t = ("Only ship to our warehouse, at most five hundred dollars per order; "
+             "today's order is nine hundred")
         with self.assertRaises(MandateRefused):
-            self.compile(with_(max_amount_words="900 mil", max_per_order_cop=900000), t)
-        pol, _ = self.compile(with_(max_amount_words="cincuenta mil pesos", max_per_order_cop=50000), t)
-        self.assertEqual(Policy(pol).max_per_order_cop, 50000)
-        t2 = "Pide con entrega en la tienda hasta 150.000 pesos"
-        self.assertEqual(Policy(self.compile(with_(max_amount_words="150.000 pesos"), t2)[0])
-                         .max_per_order_cop, 150000)
+            self.compile(with_(max_amount_words="nine hundred", max_per_order_dollars=900), t)
+        pol, _ = self.compile(with_(max_amount_words="five hundred dollars",
+                                    max_per_order_dollars=500), t)
+        self.assertEqual(Policy(pol).max_per_order_cents, 50000)
+        t2 = "Ship to our warehouse up to 1,500 dollars"
+        self.assertEqual(Policy(self.compile(with_(max_amount_words="1,500 dollars"), t2)[0])
+                         .max_per_order_cents, 150000)
+        t3 = "Ship to our warehouse, no more than fifteen hundred dollars an order"
+        self.assertEqual(Policy(self.compile(GOOD, t3)[0]).max_per_order_cents, 150000)
 
     def test_destination_in_a_negative_is_refused(self):
-        for t in ("No pidas con entrega en la tienda, máximo ciento cincuenta mil pesos",
-                  "Nunca entregues en la tienda, máximo ciento cincuenta mil pesos por pedido"):
+        for t in ("Don't ship to our warehouse, at most fifteen hundred dollars",
+                  "Do not ship to our warehouse, at most fifteen hundred dollars per order",
+                  "Never ship to our warehouse, at most fifteen hundred dollars per order",
+                  "Not to our warehouse, at most fifteen hundred dollars per order"):
             with self.subTest(t=t):
                 with self.assertRaises(MandateRefused):
                     self.compile(GOOD, t)
 
     def test_million_ceiling_refused(self):
-        t = "Solo pide con entrega en la tienda, máximo un millón de pesos por pedido"
-        with self.assertRaises(MandateRefused):
-            self.compile(with_(max_amount_words="un millón de pesos",
-                               max_per_order_cop=1000000), t)
+        for words, n in (("one million dollars", 1000000), ("1,000,000 dollars", 1000000),
+                         ("fifteen hundred thousand dollars", 1500000)):
+            t = "Only ship to our warehouse, at most %s per order" % words
+            with self.subTest(words=words):
+                with self.assertRaises(MandateRefused):
+                    self.compile(with_(max_amount_words=words, max_per_order_dollars=n), t)
 
     def test_text_path_skips_voice(self):
         meta = FakeMeta(GOOD)
@@ -233,7 +245,7 @@ class MandateTests(unittest.TestCase):
 
 
 class MandateCliTests(unittest.TestCase):
-    def run_cli(self, extraction, confirm_answer="s", extra=()):
+    def run_cli(self, extraction, confirm_answer="y", extra=()):
         tmp = Path(tempfile.mkdtemp())
         out, key = tmp / "p.policy.yaml", tmp / "owner.key"
         args = pc.build_parser().parse_args(
@@ -247,8 +259,8 @@ class MandateCliTests(unittest.TestCase):
         p = load(out)
         self.assertTrue(p.hash_matches_stored())
         self.assertTrue(p.signature_valid(keys.public_from_seed(keys.load_seed(key))))
-        self.assertEqual(p.signed_by, "owner-key:marta")
-        self.assertEqual(p.deliver_only[0]["address"], "Calle 45 # 12-30, Bogotá")
+        self.assertEqual(p.signed_by, "owner-key:larkspur")
+        self.assertEqual(p.deliver_only[0]["address"], "120 Harbor Road, Unit 4, Riverton")
 
     def test_no_confirmation_writes_nothing(self):
         rc, out, _ = self.run_cli(GOOD, confirm_answer="n")
@@ -258,7 +270,7 @@ class MandateCliTests(unittest.TestCase):
     def test_stamp_updates_a_dumped_policy(self):
         # review F1-1: yaml.safe_dump writes sha256/signature unquoted
         rc, out, key = self.run_cli(GOOD)
-        out.write_text(out.read_text().replace("150000", "120000"))
+        out.write_text(out.read_text().replace("150000", "124000"))
         self.assertFalse(load(out).hash_matches_stored())
         pc._stamp_file(out, key)
         p = load(out)
@@ -266,7 +278,7 @@ class MandateCliTests(unittest.TestCase):
         self.assertTrue(p.signature_valid(keys.public_from_seed(keys.load_seed(key))))
 
     def test_refused_extraction_writes_nothing(self):
-        rc, out, _ = self.run_cli(with_(max_per_order_cop=999999999), extra=["--yes"])
+        rc, out, _ = self.run_cli(with_(max_per_order_dollars=999999999), extra=["--yes"])
         self.assertEqual(rc, 1)
         self.assertFalse(out.exists())
 
