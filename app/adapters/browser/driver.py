@@ -117,6 +117,16 @@ class PlaywrightDriver(BrowserDriver):
     def pixel_channel(self):
         return self._pixels
 
+    POINT_SETTLE_MS = 300
+
+    def point_at(self, action):
+        """Move the pointer onto a click's target without pressing (spec 11), and
+        let the page react. The loop looks once more after this, so whatever the
+        page does when the pointer arrives is seen before the click."""
+        if action.get("kind") in ("click", "double_click"):
+            self.page.mouse.move(action["x"], action["y"])
+            self.page.wait_for_timeout(self.POINT_SETTLE_MS)
+
     def execute(self, action):
         kind, mouse, kb = action.get("kind"), self.page.mouse, self.page.keyboard
         if kind == "click":

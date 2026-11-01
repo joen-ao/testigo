@@ -153,8 +153,18 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                 # screen). Read again; anything other than a match blocks here.
                 vr, _ = interceptor.reread(approved["read"], approved["crops"], obs, "review")
                 out.checked += 1
-                out.emit(vr)
-                if vr["status"] != ev.MATCH:
+                if (why.startswith(NO_BUTTON) and vr["status"] == ev.CANNOT_VERIFY
+                        and _no_order_in(interceptor.last_regions, interceptor.confidence_min)):
+                    # As below for the first check (spec 11): a click re-read only
+                    # because no confirm button was found, on a screen that shows no
+                    # order (back on the account page after approving). The next
+                    # click that does confirm is re-read against the approval.
+                    out.emit(ev.agent_step(obs.frame, "no order on this screen: the click goes ahead"))
+                    is_sensitive = False
+                    vr = None
+                else:
+                    out.emit(vr)
+                if vr is not None and vr["status"] != ev.MATCH:
                     out.blocked = True
                     out.blocked_at = "review"
                     # F8-D2: the approval still leaves a signed receipt, blocked, no executed side
@@ -196,7 +206,7 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
                                 "read": {"amount": usd(a["amount_cents"]), "address": a["address"]}}
 
         if supervised and is_sensitive and getattr(driver, "recapture_before_sensitive", False) \
-                and not _unchanged_since_check(driver, obs, interceptor.last_regions, out):
+                and not _unchanged_since_check(driver, obs, interceptor.last_regions, out, action):
             # Spec 07 M3, review: the check takes seconds; a page that changed
             # meanwhile is not clicked. The agent looks again, and the next
             # sensitive click is checked against what the person approved. A page
@@ -250,13 +260,19 @@ def run(driver, agent, supervised=True, approver=None, policy_path=None, sink=No
     return out
 
 
-def _unchanged_since_check(driver, checked, regions, out):
+def _unchanged_since_check(driver, checked, regions, out, action=None):
     """Capture once more right before the click: the amount and address regions
     must show what the check read. Compared pixel by pixel with a small
     tolerance (`region_changed`), so rendering noise does not stop a click but
     another address or total does. With no boxes, the whole screen is compared."""
     if not getattr(checked, "screenshot", b""):
         return True                        # nothing to compare (no screenshot)
+    # Spec 11: the pointer goes to the target first, as the click would take it
+    # there; a page that changes when the pointer arrives (A4) changes now, and
+    # this last look sees it before anything is pressed.
+    point = getattr(driver, "point_at", None)
+    if action is not None and point is not None:
+        point(action)
     now = driver.observe()
     out.last_capture = now
     out.emit(ev.frame_captured(now.frame, now.sha(), image=getattr(now, "image", None)))
@@ -297,10 +313,12 @@ def region_changed(before_png, after_png, box=None):
 
 def _no_order_on_screen(decision, confidence_min):
     """The check found neither an order total nor a confirm button it is sure of."""
-    if decision.status != ev.CANNOT_VERIFY:
-        return False
-    sure = {r["label"] for r in decision.check_event.get("regions") or []
-            if (r.get("confidence") or 0) >= confidence_min}
+    return decision.status == ev.CANNOT_VERIFY and _no_order_in(
+        decision.check_event.get("regions"), confidence_min)
+
+
+def _no_order_in(regions, confidence_min):
+    sure = {r["label"] for r in regions or [] if (r.get("confidence") or 0) >= confidence_min}
     return "amount" not in sure and "confirm button" not in sure
 
 

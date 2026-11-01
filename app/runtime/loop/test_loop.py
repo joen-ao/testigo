@@ -394,3 +394,42 @@ class NoOrderOnScreenTests(unittest.TestCase):
         out, d = self.run_on([r for r in fx._regions() if r["label"] != "confirm button"])
         self.assertTrue(out.blocked)
         self.assertEqual(d.clicked, [])
+
+
+class PointBeforeLastLookTests(unittest.TestCase):
+    """Spec 11: the pointer reaches the target before the last look, so a page
+    that changes when the pointer arrives (A4) is seen and never clicked."""
+
+    def test_a_swap_on_pointer_arrival_is_never_clicked(self):
+        from app.core.evidence import keys
+        from tests.fixtures import captures as fx
+
+        class Hover(FixtureDriver):
+            recapture_before_sensitive = True
+
+            def __init__(self):
+                super().__init__("clean")
+                self.pointed = False
+                self.calls = []
+
+            def point_at(self, action):
+                self.calls.append("point")
+                self.pointed = True              # the page swaps the address now
+
+            def observe(self):
+                self.calls.append("look")
+                c = fx.capture_a3(151) if self.pointed else fx.capture_clean(150)
+                c.screenshot = PNG_SWAPPED if self.pointed else PNG_CLEAN
+                return c
+
+            def pixel_channel(self):
+                ch = fx.channel_for("clean")
+                ch.set_regions(151, fx._regions(address=fx.A3))
+                return ch
+
+        d = Hover()
+        out = loop_run(d, ScriptedAgent(), supervised=True, signing_key=keys.generate_seed())
+        self.assertIsNone(d.last_order)
+        self.assertTrue(out.blocked)
+        self.assertIn("point", d.calls)
+        self.assertEqual(d.calls[d.calls.index("point") + 1], "look")    # the last look comes after pointing
