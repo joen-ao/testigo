@@ -131,6 +131,19 @@ def runs_label(path):
     return path.name
 
 
+def committed_policy_pubkey():
+    """The public key that signed the committed demo rules (app/core/policy/
+    larkspur.pub), so any clone can check that signature without the owner's
+    private key. None if the file is missing or unreadable."""
+    p = POLICY_PATH.with_suffix("").with_suffix(".pub")
+    try:
+        lines = [x.strip() for x in p.read_text(encoding="utf-8").splitlines()
+                 if x.strip() and not x.startswith("#")]
+        return bytes.fromhex(lines[0]) if lines and len(lines[0]) == 64 else None
+    except (OSError, ValueError):
+        return None
+
+
 def owner_pubkey():
     """The owner's Ed25519 public key (32 bytes), from the key on this machine
     (SIGNING_KEY_PATH; the same key pair as the receipts, F1-D3), or None."""

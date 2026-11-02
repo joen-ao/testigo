@@ -367,3 +367,27 @@ class Spec12Tests(unittest.TestCase):
         self.assertEqual(st["policy_source"], "signed here")
         self.assertTrue(st["policy_problem"])
         self.assertIn("NOT TRUSTED", self.c.get("/status").text)
+
+
+class CommittedRulesKeyTests(unittest.TestCase):
+    """A teammate's clone: their own owner key must not make the demo's rules
+    look untrusted. Those are checked against the key published with them."""
+
+    def test_another_owner_key_still_sees_the_demo_rules_signed(self):
+        import tempfile
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from app.core.evidence import keys
+        tmp = Path(tempfile.mkdtemp())
+        key = tmp / "teammate.key"
+        keys.load_or_create_seed(key)
+        with mock.patch.dict(os.environ, {"SIGNING_KEY_PATH": str(key), "RUNS_DIR": str(tmp / "runs")}):
+            p = TestClient(service.app).get("/api/policy").json()
+        self.assertEqual((p["active"], p["hash_ok"], p["signature_valid"]), ("committed", True, True))
+
+    def test_the_published_key_is_the_one_that_signed(self):
+        from app.common import config
+        from app.core.policy.model import load
+        pub = config.committed_policy_pubkey()
+        self.assertEqual(len(pub), 32)
+        self.assertTrue(load(config.POLICY_PATH).signature_valid(pub))

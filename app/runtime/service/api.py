@@ -594,11 +594,16 @@ def policy_view(policy, path):
     """The policy as view 1 shows it. Never any key material."""
     s = config.settings()
     sig_valid = None   # unknown without the owner's key on this machine
-    if s.signing_key_path.is_file():
+    committed = Path(path) == config.POLICY_PATH
+    if committed and config.committed_policy_pubkey():
+        # the demo's rules are checked against the key that signed them, published
+        # with them, never against whichever key this machine happens to hold
+        sig_valid = policy.signature_valid(config.committed_policy_pubkey())
+    elif s.signing_key_path.is_file():
         from app.core.evidence import keys
         sig_valid = policy.signature_valid(keys.public_from_seed(keys.load_seed(s.signing_key_path)))
     return {
-        "active": "committed" if Path(path) == config.POLICY_PATH else "signed_here",
+        "active": "committed" if committed else "signed_here",
         "path": _policy_label(path),
         "owner": policy.owner,
         "source": policy.source,

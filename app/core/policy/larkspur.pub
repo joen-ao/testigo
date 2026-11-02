@@ -1,0 +1,3 @@
+# Public Ed25519 key that signed larkspur.policy.yaml (the demo's committed rules).
+# Public on purpose: anyone can check that signature. The private key never leaves the owner's machine.
+b1ac36f394befd53bab1885ab06c4b26a7e13e0c04bd3ae32471f49de30b12b1

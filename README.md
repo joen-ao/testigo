@@ -276,6 +276,9 @@ Real runs (they spend Meta credits; `runs/usage.jsonl` logs every call and
 
 ## How to try it
 
+Testing it for the team? Follow [`docs/testing/guia-testers.pdf`](docs/testing/guia-testers.pdf)
+(Spanish, step by step) and report with the **Reporte de tester** issue template.
+
 Open <http://localhost:8090/> after `make run`. The landing explains the
 problem, the three attacks, how TESTIGO+ works and the WitnessBench numbers
 (read from `runs/bench_results.json`, or the committed copy in `results/`;

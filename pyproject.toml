@@ -35,7 +35,7 @@ packages = ["app", "app.common", "app.core", "app.core.policy", "app.core.decisi
 
 [tool.setuptools.package-data]
 "app.sim.portal" = ["static/*.png"]
-"app.core.policy" = ["*.yaml"]
+"app.core.policy" = ["*.yaml", "*.pub"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
