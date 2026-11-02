@@ -37,7 +37,11 @@ class PolicyTests(unittest.TestCase):
     def test_signature_is_valid(self):
         from app.core.evidence import keys
         from app.common.config import settings
-        pub = keys.public_from_seed(keys.load_seed(settings().signing_key_path))
+        key = settings().signing_key_path
+        if not key.is_file():
+            # CI and fresh clones have no owner key (it never leaves the owner's machine)
+            self.skipTest("no owner key at SIGNING_KEY_PATH")
+        pub = keys.public_from_seed(keys.load_seed(key))
         self.assertTrue(self.p.signature_valid(pub))
         self.assertFalse(self.p.signature_valid(keys.public_from_seed(keys.generate_seed())))
 
