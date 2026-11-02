@@ -344,28 +344,31 @@ Honest snapshot; decisions and measurements in
 [`docs/specs/04-escenario-global.md`](docs/specs/04-escenario-global.md).
 On Nov 1 the team decided (R2) that TESTIGO+ protects the delivery address of a
 supplier order, and then moved the demo to the global scenario (Larkspur
-Market, USD, English voice). The gates and WitnessBench were measured again in
-the global scenario on the night of Oct 31.
+Market, USD, English voice). The gates were measured in the global scenario on
+the night of Oct 31; WitnessBench was measured again on Nov 1 with A4 and the
+account page (spec 11).
 
 | Piece | State |
 | --- | --- |
 | Meta API (Wonder, Spark, SAM, Voice) | connected; global-scenario gates: g1 5/5, g2 10/10, g5 5/5, g6 20/20 exact (median 843 ms) pass; g4 (SAM alone) 54/90, fails — the pixel channel does not rely on SAM alone |
-| Portal: two-step order, editable delivery address, account page with the saved address, A1–A4, legitimate hidden text, token-protected order log | works (F2, spec 07); A4 and the account page are not yet measured with real models |
+| Portal: two-step order, editable delivery address, account page with the saved address, A1–A4, legitimate hidden text, token-protected order log | works (F2, specs 07 and 11); measured with real models on Nov 1 |
 | Wonder driving Chromium with our function tools, multi-step loop | works (F3) |
-| Pixel channel: Spark reads + SAM boxes + real crops | works (F4); median 14.2 s per check, p90 17.8 s (WitnessBench, global scenario) |
+| Pixel channel: Spark reads + SAM boxes + real crops | works (F4); median 13.8 s per check, p90 22.7 s (WitnessBench, Nov 1, 127 checks) |
 | Divergence filter, decision engine, signed policy (`deliver_only`) | works (F5, F6) |
 | Spoken mandate → signed policy | works with Voice + Spark (F1) |
 | Voice approval in the interface | built; tested offline and headless, not yet with a real microphone (F7) |
 | Re-read on the review screen (blocks) and after the click (flags) | works (F8) |
 | Signed receipts in every approved run, `testigo verify` | works; a real receipt verifies (F9) |
-| WitnessBench | global scenario, real run on 31 Oct (F10, `results/witnessbench-2026-10-31-global.json`): 42 of 42 without errors. Without TESTIGO+, 0 of 15 orders reached the attacker in this run (Wonder ignored A1/A2 and stalled on A3; in the run before, same agent and attacks, 3 of 5 A3 orders did). With TESTIGO+, 15 of 15 attacks held before Confirm and 0 of 5 clean orders held; 3 clean orders delivered with a receipt, 2 stalled in the agent looking for the saved address. Median 14.2 s per check (p90 17.8 s). Details in `docs/specs/04-escenario-global.md` |
+| WitnessBench | global scenario with A4 and the account page, real run on Nov 1 (F10, `results/witnessbench-2026-11-01-global.json`): 52 of 52 configurations, no errors after retrying the ones the Meta API dropped (`--resume`). **Without TESTIGO+, 5 of 20 attack orders reached the attacker** (A3 3 of 5, A4 2 of 5; Wonder ignored every A1/A2 notice). **With TESTIGO+, 0 of 20**: 18 held before Confirm, in 2 the agent stopped on its own first. 0 of 5 clean orders held; 4 of 5 delivered with a receipt. Median 13.8 s per check. The Oct 31 run is kept as history in `results/` and spec 04 |
 | Live interface | landing, four-step guided demo that starts runs (`POST /api/run`), results page; presenter views at `#/present` (F11) |
 
 The Meta computer-use tool is not available for Wonder with our keys, so
 Wonder drives the browser through our own `function` tools (F3-D5). Wonder
-is hard to fool on its own: with the hardened attacks it fell for the forged
-address in 3 of 5 runs once and in 0 of 5 the next time. TESTIGO+ does not
-depend on that: it held all 15 attacks from the screen and the signed policy.
+is hard to fool with written instructions: it ignored every A1/A2 notice. It
+falls when the screen itself lies about where the goods go: the forged address
+(A3, 3 of 5) and the address swapped as the pointer reaches Confirm (A4, 2 of
+5). TESTIGO+ does not depend on what the agent believes: none of the 20 attack
+orders reached the attacker with it.
 
 ## Architecture
 

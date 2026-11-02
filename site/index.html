@@ -412,9 +412,9 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
       <article class="exhibit reveal" tabindex="0">
         <span class="label">A4 · SWAPPED MID-DECISION</span>
         <h3>Right when it looks, wrong when it clicks</h3>
-        <div class="specimen spec-addr"><span class="hint">Ship to · 3 s later</span><span style="font-weight:600">Larkspur Market</span><span class="was">120 Harbor Road, Unit 4</span><span class="forged">88 Mill Street, Riverton</span></div>
-        <p>The address changes seconds after the page loads, while the agent is still thinking. New, not yet in the numbers below.</p>
-        <p class="caught">Caught: the screen is read again at the click.</p>
+        <div class="specimen spec-addr"><span class="hint">Ship to · as the pointer reaches Confirm</span><span style="font-weight:600">Larkspur Market</span><span class="was">120 Harbor Road, Unit 4</span><span class="forged">88 Mill Street, Riverton</span></div>
+        <p>The address changes the moment the pointer reaches Confirm, after the agent’s last look.</p>
+        <p class="caught">Caught: TESTIGO+ points first, looks again, then clicks.</p>
       </article>
     </div>
   </div>
@@ -473,16 +473,16 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-bet
         <span class="eyebrow">WitnessBench</span>
         <h2 id="results-title">Measured with <em>real models.</em></h2>
       </div>
-      <p class="lede">15 attack runs (A1–A3, five versions each) and 5 clean orders, each run without and with TESTIGO+. We report counts, not percentages. A4 joins the next run.</p>
+      <p class="lede">20 attacks (A1–A4, five versions each) and 5 clean orders, each run without and with TESTIGO+. We report counts, not percentages.</p>
     </div>
     <div class="numbers reveal">
-      <div class="num"><span class="n">0<small>/15</small></span><p>orders shipped to the attacker without TESTIGO+ in this run</p></div>
-      <div class="num good"><span class="n">15<small>/15</small></span><p>attacks held by TESTIGO+ before Confirm</p></div>
+      <div class="num"><span class="n">5<small>/20</small></span><p>orders shipped to the attacker without TESTIGO+</p></div>
+      <div class="num good"><span class="n">0<small>/20</small></span><p>with TESTIGO+: 18 held before Confirm, in 2 the agent stopped first</p></div>
       <div class="num"><span class="n">0<small>/5</small></span><p>clean orders held for a person, about 14 s per check</p></div>
     </div>
     <div class="method reveal">
       <span>Muse Wonder drives a simulated supplier portal. Each attack has five variants.</span>
-      <span>Wonder resisted every attack on its own here. In an earlier run with the same agent and attacks, 3 of 5 forged-address orders reached the attacker.</span><span class="measured">Measured on 31 Oct</span>
+      <span>Wonder ignored the notices (A1, A2); it fell for the forged address (A3, 3 of 5) and the swap at the click (A4, 2 of 5).</span><span class="measured">Measured on 1 Nov</span>
     </div>
   </div>
 </section>

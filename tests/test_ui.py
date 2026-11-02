@@ -168,7 +168,7 @@ class ServiceUITests(unittest.TestCase):
         self.assertTrue(got["source"].startswith("results/witnessbench-"))
         self.assertIn("summary", got["data"])
         # the newest committed results are this scenario's
-        self.assertEqual(got["source"], "results/witnessbench-2026-10-31-global.json")
+        self.assertEqual(got["source"], "results/witnessbench-2026-11-01-global.json")
         self.assertIs(got["current"], True)
         (self.tmp / "bench_results.json").write_text('{"summary": {}}')
         got = self.c.get("/api/bench").json()
@@ -804,14 +804,15 @@ class FlowPageTests(ChromiumCase):
         self.assertEqual(self.page.get_attribute("#start-demo", "href"), "#/demo/rules")
 
     def test_landing_reads_the_results_of_this_scenario(self):
-        # no local run: the newest committed results (global scenario, 31 Oct)
+        # no local run: the newest committed results (global scenario with A4, 1 Nov)
         self.open("#/", ".figs:not(.pending-figs)")
         t = self.main()
-        for want in ("0/15", "orders shipped to the attacker without TESTIGO+", "0/5",
-                     "held for a person", "about 14 s per check", "Muse Wonder resisted every attack",
-                     "TESTIGO+ still held 15 of 15 before Confirm",
-                     "Measured on 31 Oct"):
+        for want in ("5/20", "orders shipped to the attacker without TESTIGO+", "0/20", "0/5",
+                     "held for a person", "about 14 s per check",
+                     "With TESTIGO+, 18 of 20 attacks were held before Confirm; in 2 the agent stopped on its own first",
+                     "Measured on 1 Nov"):
             self.assertIn(want, t)
+        self.assertNotIn("resisted every attack", t)
         self.assertNotIn("%", t)
         self.assertNotIn("Re-running", t)
         self.assertIn("Simulation only", self.page.inner_text("footer"))
@@ -862,7 +863,8 @@ class FlowPageTests(ChromiumCase):
         (self.tmp / "bench_results.json").unlink()
         self.open("#/results", ".rtable")
         t = self.main()
-        for want in ("WitnessBench results", "10 of 10", "0/15", "0/5", "15 of 15", "Hidden order in the page code",
+        for want in ("WitnessBench results", "10 of 10", "5/20", "0/20", "0/5", "18 of 20", "Hidden order in the page code",
+                     "Address swapped while the agent decides",
                      "Reached the attacker", "Stopped by TESTIGO+", "Agent stopped on its own"):
             self.assertIn(want.lower(), t.lower())     # labels in upper case by CSS
         a1_with = self.page.locator(".rtable tbody tr").nth(3).inner_text()
@@ -1187,7 +1189,7 @@ class FlowPageTests(ChromiumCase):
              "scenario": CURRENT}))
         self.open("#/", ".figs:not(.pending-figs)")
         # the landing keeps the committed complete results
-        self.assertIn("0/15", self.main())
+        self.assertIn("5/20", self.main())
         self.assertNotIn("2/3", self.main())
         self.open("#/results", ".figs:not(.pending-figs)")
         t = self.main()

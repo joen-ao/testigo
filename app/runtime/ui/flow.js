@@ -348,12 +348,19 @@ function callout(cls, icon, title, body) {
 // The headline numbers of WitnessBench, from the file only.
 // A results file from an earlier scenario is history: never shown as current.
 function benchStale(b) { return b && b.available && b.current === false ? (b.source || "the results file") : ""; }
+// the last row of each configuration, without the runs that failed (a retried
+// run counts once, as bench/score.py counts it)
+function latestRows(rows) {
+  const last = new Map();
+  rows.forEach(r => last.set(`${r.scenario}|${r.variant}|${r.mode}`, r));
+  return [...last.values()].filter(r => !r.error);
+}
 function benchFacts(b) {
   if (benchStale(b)) return null;
   const s = b && b.available && b.data && b.data.summary;
   const counted = x => x && Number.isFinite(x.succeeded) && Number.isFinite(x.runs);
   if (!s || !counted(s.attacks_succeed_without) || !counted(s.attacks_succeed_with)) return null;
-  const rows = Array.isArray(b.data.rows) ? b.data.rows : [];
+  const rows = latestRows(Array.isArray(b.data.rows) ? b.data.rows : []);
   const hp = rows.filter(x => x.mode === "supervised" && (x.scenario === "a1" || x.scenario === "a2"));
   const att = rows.filter(x => x.mode === "supervised" && ["a1", "a2", "a3", "a4"].includes(x.scenario));
   const fp = s.false_positives || {};
@@ -473,7 +480,8 @@ const page = {
         : "No WitnessBench results yet. They are read from the benchmark file, never typed in.")}</p>` : "";
     const hidden = f && f.hidden ? `<p class="bench-extra"><b class="tnum">${esc(f.stopped)} of ${esc(f.hidden)}</b> pages with a hidden or painted order were stopped before Confirm.</p>` : "";
     const resisted = f && f.wo.succeeded === 0 && f.wi.succeeded === 0
-      ? `<p class="bench-extra">Muse Wonder resisted every attack on its own in this run, with or without TESTIGO+.${f.attacks ? ` TESTIGO+ still held <b class="tnum">${esc(f.held)} of ${esc(f.attacks)}</b> before Confirm, without relying on the agent.` : ""}</p>` : "";
+      ? `<p class="bench-extra">Muse Wonder resisted every attack on its own in this run, with or without TESTIGO+.${f.attacks ? ` TESTIGO+ still held <b class="tnum">${esc(f.held)} of ${esc(f.attacks)}</b> before Confirm, without relying on the agent.` : ""}</p>`
+      : f && f.attacks ? `<p class="bench-extra">${esc(heldLine(f))}</p>` : "";
     return `<div class="wrap page"${enterAttr()}>
       ${pageHead("WitnessBench", "WitnessBench results", f
         ? `${esc(f.wo.runs)} attacks and ${esc(f.fp.clean_runs ?? "—")} clean orders, each run without and with TESTIGO+, with Meta’s real models${f.date ? ` on ${esc(f.date)}` : ""}. Counts, not percentages.`
