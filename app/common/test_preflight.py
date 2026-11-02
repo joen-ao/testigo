@@ -49,5 +49,27 @@ class PreflightTests(unittest.TestCase):
         self.assertNotIn("sk-should-never-show", "\n".join(lines))
 
 
+class ChromiumProblemTest(unittest.TestCase):
+    def test_missing_linux_libraries_point_to_the_optional_target(self):
+        hint = preflight.chromium_problem(Exception("Host system is missing dependencies to run browsers"), "Linux")
+        self.assertIn("make deps-linux", hint)
+        self.assertIn("--dry-run", hint)
+
+    def test_missing_browser_says_make_setup(self):
+        hint = preflight.chromium_problem(Exception("Executable doesn't exist at /x/chrome"), "Darwin")
+        self.assertIn("make setup", hint)
+
+    def test_other_errors_show_the_raw_error(self):
+        self.assertIsNone(preflight.chromium_problem(Exception("timeout"), "Linux"))
+        self.assertIsNone(preflight.chromium_problem(Exception("missing dependencies"), "Darwin"))
+
+    def test_setup_never_uses_sudo(self):
+        makefile = (preflight.config.ROOT / "Makefile").read_text()
+        setup = makefile.split("\nsetup:", 1)[1].split("\n\n", 1)[0]
+        self.assertNotIn("sudo", setup)
+        self.assertNotIn("--with-deps", setup)
+        self.assertNotIn("install-deps", setup)
+
+
 if __name__ == "__main__":
     unittest.main()

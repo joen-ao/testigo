@@ -63,7 +63,7 @@ def main():
         print("capture      %dx%d %s" % (size[0], size[1], "OK" if good else "WRONG (want 1280x800)"))
         ok = ok and good
     except Exception as e:  # noqa: BLE001
-        print("\nbrowser check failed: %s: %s" % (type(e).__name__, e))
+        print("\nbrowser check failed: %s" % (preflight.chromium_problem(e) or "%s: %s" % (type(e).__name__, e)))
         ok = False
     finally:
         httpd.shutdown()

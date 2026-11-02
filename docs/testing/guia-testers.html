@@ -72,7 +72,7 @@ cd testigo</pre></li>
   <li>Crea tu llave de firma (para que los recibos queden firmados en tu máquina):
 <pre>make setup
 .venv/bin/testigo keygen</pre>
-  <code>make setup</code> instala todo la primera vez (unos 3 a 5 minutos) y corre las pruebas automáticas; al final deben pasar todas.</li>
+  <code>make setup</code> instala todo la primera vez (unos 3 a 5 minutos) y corre las pruebas automáticas; al final deben pasar todas. <b>Ningún paso pide tu contraseña</b>: todo queda dentro de la carpeta del repo. Si en Linux se detiene con «Chromium is installed but cannot start», mira la sección 6.</li>
   <li>Revisa que la máquina esté lista:
 <pre>make doctor</pre>
   Todo debe salir <span class="ok">[ok]</span>. Si algo sale <b>[FAIL]</b> o <b>[warn]</b>, la misma línea dice qué hacer. Anota cualquier cosa rara.</li>
@@ -157,6 +157,7 @@ cd testigo</pre></li>
 <table>
   <tr><th style="width:36%">Ves</th><th>Haz</th></tr>
   <tr><td><code>make</code> o <code>python3.12</code> no existe</td><td>Instala Python 3.12 y las herramientas de línea de comandos (macOS: <code>xcode-select --install</code>).</td></tr>
+  <tr><td>Linux: <code>make setup</code> se detiene con «Chromium is installed but cannot start»</td><td>A tu máquina le faltan librerías del sistema que Chromium necesita (fuentes, libnss3…). Para ver cuáles: <code>.venv/bin/python -m playwright install-deps chromium --dry-run</code>. Para instalarlas: <code>make deps-linux</code> (usa <code>apt</code> y pide <code>sudo</code>; es lo único que lo pide). Luego <code>make setup</code> de nuevo.</td></tr>
   <tr><td>«address already in use» al hacer <code>make run</code></td><td>Ya hay algo usando el puerto 8080 u 8090. Cierra la otra terminal con <code>make run</code>, o cambia <code>PORTAL_PORT</code> / <code>INTERCEPTOR_PORT</code> en tu <code>.env</code>.</td></tr>
   <tr><td>«The run did not work» al iniciar una corrida</td><td>Revisa que el <code>.env</code> esté en la raíz y corre <code>make doctor</code>. Abre «Last lines the run printed» y mándanos ese texto.</td></tr>
   <tr><td>«Your rules could not be trusted»</td><td>En el paso 1, <b>Restore the demo’s rules</b>.</td></tr>

@@ -231,6 +231,11 @@ flowchart TB
 Needs macOS or Linux, `git`, `make`, and Python 3.12
 (`brew install python@3.12`).
 
+No step asks for your password: everything installs inside the repo (`.venv`)
+and your user folder. On Linux, if Chromium needs system libraries, `make setup`
+stops and says so; `make deps-linux` installs them with `apt` (that one uses
+`sudo`, and only if you run it).
+
 ```bash
 cp .env.example .env    # fill in your own Meta API key; never commit .env
 make run                # installs what is missing, starts portal + interceptor
@@ -324,6 +329,7 @@ rules in force.
 | --- | --- | --- |
 | `PolicyNotTrusted` or "Your rules could not be trusted" | The rules signed in the interface (`runs/policy/active.policy.yaml`) were edited, are not signed by this machine's owner key, or are not well formed. TESTIGO+ refuses to run rather than fall back to other rules. | In the app, step 1 → **Restore the demo's rules**, or delete that file; or sign new rules (**Record new rules** / **Edit rules**). |
 | "the owner key is not on this machine" / receipts "not signed" | No key at `SIGNING_KEY_PATH` (default `.secrets/receipts.key`). | `.venv/bin/testigo keygen` |
+| `make setup` stops: "Chromium is installed but cannot start" (Linux) | The machine lacks system libraries Chromium needs (fonts, libnss3…). Setup never installs them by itself. | See the list with `.venv/bin/python -m playwright install-deps chromium --dry-run`; install them with `make deps-linux` (apt, asks for `sudo`), then `make setup` again. |
 | `make run` fails with "address already in use" | The portal (8080) or the interface (8090) is already running, maybe from an earlier start. | Stop that process, or set `PORTAL_PORT` / `INTERCEPTOR_PORT` in `.env`. |
 | A benchmark row says `APIConnectionError` | The connection to the Meta API dropped mid-run (it happened on 1 Nov). Nothing is counted for that row. | Run the same command again with `--resume`: only the failed rows run. |
 | `SpendCapExceeded` | `MAX_SPEND_USD` (all runs) or `MAX_RUN_SPEND_USD` (one run) was reached. The check fails closed. | Raise the cap in `.env` on purpose, or stop. |

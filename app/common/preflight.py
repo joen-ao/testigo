@@ -79,3 +79,21 @@ def report(items):
     mark = {OK: "ok  ", WARN: "warn", FAIL: "FAIL"}
     lines = ["  [%s] %-15s %s" % (mark[st], name, detail) for st, name, detail in items]
     return lines, all(st != FAIL for st, _, _ in items)
+
+
+DEPS_HINT = ("Chromium is installed but cannot start: this Linux machine is missing system libraries "
+             "it needs (fonts, libnss3 and the like). Nothing here asks for your password on its own. "
+             "To see the list: `.venv/bin/python -m playwright install-deps chromium --dry-run`. "
+             "To install them (runs apt with sudo, your choice): `make deps-linux`. Then `make setup` again.")
+
+
+def chromium_problem(error, system=None):
+    """What to tell the person when Chromium fails to launch, or None to show the raw error."""
+    import platform
+    text = str(error)
+    if (system or platform.system()) == "Linux" and (
+            "missing dependencies" in text or "shared libraries" in text or "install-deps" in text):
+        return DEPS_HINT
+    if "Executable doesn't exist" in text:
+        return "Chromium is not downloaded: run `make setup` (it downloads it into your user folder, no sudo)"
+    return None

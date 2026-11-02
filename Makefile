@@ -5,7 +5,7 @@ VENV  := .venv
 PY    := $(VENV)/bin/python
 READY := $(VENV)/.ready
 
-.PHONY: run setup up test test-live gate doctor check-secrets clean
+.PHONY: run setup deps-linux up test test-live gate doctor check-secrets clean
 
 ## run: install whatever is missing, then start the portal and the interceptor
 run: $(READY)
@@ -14,7 +14,7 @@ run: $(READY)
 $(READY):
 	$(MAKE) setup
 
-## setup: venv + locked dependencies + Chromium + SCORER_TOKEN + fast tests (repeatable)
+## setup: venv + locked dependencies + Chromium + SCORER_TOKEN + fast tests (repeatable; never uses sudo)
 setup:
 	@test -x "$(PY312)" || { echo "Python 3.12 not found. macOS: brew install python@3.12"; exit 1; }
 	@test -d $(VENV) || $(PY312) -m venv $(VENV)
@@ -27,14 +27,18 @@ setup:
 		echo "wrote requirements.lock"; \
 	fi
 	$(PY) -m pip install --quiet --no-deps -e .
-	@if [ "$$(uname)" = "Linux" ]; then \
-		$(PY) -m playwright install --with-deps chromium; \
-	else \
-		$(PY) -m playwright install chromium; \
-	fi
+	$(PY) -m playwright install chromium
+	$(PY) -m scripts.check_chromium
 	$(PY) -m scripts.ensure_scorer_token
 	$(PY) -m pytest -q
 	@touch $(READY)
+
+## deps-linux: optional, Linux only: the system libraries Chromium needs (apt, asks for sudo)
+deps-linux:
+	@test -x $(PY) || { echo "run make setup first"; exit 1; }
+	@echo "Playwright will install, with apt and sudo, the system libraries Chromium needs:"
+	-$(PY) -m playwright install-deps chromium --dry-run
+	$(PY) -m playwright install-deps chromium
 
 ## up: start the portal (PORTAL_PORT) and the interceptor (INTERCEPTOR_PORT)
 up: $(READY)
