@@ -1,5 +1,7 @@
 # TESTIGO+
 
+[![tests](https://github.com/joen-ao/testigo/actions/workflows/ci.yml/badge.svg)](https://github.com/joen-ao/testigo/actions/workflows/ci.yml)
+
 An independent witness for computer-use AI agents. TESTIGO+ sits between the
 agent and the browser, reads the **pixels** of the screen, and checks that what
 the agent asked for, what the person approved and what actually executed are
@@ -307,6 +309,23 @@ the site.
 
 The service only accepts requests from this machine and from its own page, so
 other tabs (the attacking portal included) cannot inject events.
+
+## Troubleshooting
+
+Start with `make doctor`: it lists what is ready and, for anything that is
+not, what to do (`.env`, Meta settings, owner key, runs folder, the rules in
+force, ports, spend caps). `/status` on the interface says the same about the
+rules in force.
+
+| What you see | What it means | What to do |
+| --- | --- | --- |
+| `PolicyNotTrusted` or "Your rules could not be trusted" | The rules signed in the interface (`runs/policy/active.policy.yaml`) were edited, are not signed by this machine's owner key, or are not well formed. TESTIGO+ refuses to run rather than fall back to other rules. | In the app, step 1 → **Restore the demo's rules**, or delete that file; or sign new rules (**Record new rules** / **Edit rules**). |
+| "the owner key is not on this machine" / receipts "not signed" | No key at `SIGNING_KEY_PATH` (default `.secrets/receipts.key`). | `.venv/bin/testigo keygen` |
+| `make run` fails with "address already in use" | The portal (8080) or the interface (8090) is already running, maybe from an earlier start. | Stop that process, or set `PORTAL_PORT` / `INTERCEPTOR_PORT` in `.env`. |
+| A benchmark row says `APIConnectionError` | The connection to the Meta API dropped mid-run (it happened on 1 Nov). Nothing is counted for that row. | Run the same command again with `--resume`: only the failed rows run. |
+| `SpendCapExceeded` | `MAX_SPEND_USD` (all runs) or `MAX_RUN_SPEND_USD` (one run) was reached. The check fails closed. | Raise the cap in `.env` on purpose, or stop. |
+| The landing says "Re-running with the current scenario" | The results file is from an earlier scenario, so it is not shown as current. | Run WitnessBench (`.venv/bin/python -m bench.run --edge --tag full`). |
+| A run ends "Paused: the screen could not be read clearly" | Spark and SAM did not agree on the total or the address. In doubt, TESTIGO+ does not click. | Run it again; if it repeats, the run's frames are in `runs/<day>/<run>/`. |
 
 ## WitnessBench
 

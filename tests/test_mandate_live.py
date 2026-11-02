@@ -395,9 +395,13 @@ class MandateServiceTests(Isolated):
                                      headers=SAME).status_code, 409)
         self.assertEqual(self.c.post("/api/mandate/sign", json={"id": ["x"]},
                                      headers=SAME).status_code, 409)
-        # the page cannot send its own rules: only the id counts
+        # the page cannot send its own rules: refused outright (spec 12 O4), and
+        # the draft still signs with its id alone
         r = self.c.post("/api/mandate/sign", json={"id": d["id"], "max_per_order_cents": 9_999_999},
                         headers=SAME)
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("unknown field", r.json()["detail"])
+        r = self.c.post("/api/mandate/sign", json={"id": d["id"]}, headers=SAME)
         self.assertEqual(r.json()["max_per_order_cents"], 150000)
 
     def test_no_owner_key_signs_nothing(self):

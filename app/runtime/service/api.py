@@ -185,20 +185,28 @@ def receipt_path(path):
 
 def status():
     s = config.settings()
+    # spec 12 O5: say plainly whether the rules in force can be trusted, and why not
+    trusted, problem = True, ""
+    source = "signed here" if config.active_policy_path().is_file() else "committed"
     try:
         policy = load_policy(config.policy_path())
         policy_sha = policy.short_sha()
         policy_ok = policy.hash_matches_stored()
-    except config.PolicyNotTrusted:
+    except config.PolicyNotTrusted as e:
         policy_sha, policy_ok = "not trusted (active policy)", False
+        trusted, problem = False, str(e)
     except Exception as e:  # noqa: BLE001
         policy_sha, policy_ok = "unreadable (%s)" % type(e).__name__, False
+        trusted, problem = False, "unreadable (%s)" % type(e).__name__
     return {
         "service": "interceptor",
         "time": clock.iso(),
         "portal": s.portal_url,
         "policy_sha256": policy_sha,
         "policy_hash_ok": policy_ok,
+        "policy_trusted": trusted,
+        "policy_source": source,
+        "policy_problem": problem,
         "models_configured": config.configured(),
         "signing_key_present": s.signing_key_path.is_file(),
         "ui": "/",
@@ -296,7 +304,7 @@ def transcribe_wav(path):
     return text, ms
 
 
-async def json_body(request, limit):
+async def json_body(request, limit, fields=None):
     """A JSON object body of at most `limit` bytes, read without trusting
     Content-Length."""
     if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
@@ -317,6 +325,11 @@ async def json_body(request, limit):
         raise HTTPException(422, "body is not valid JSON")
     if not isinstance(data, dict):
         raise HTTPException(422, "body must be a JSON object")
+    if fields is not None:
+        # spec 12 O4: every JSON route names its fields; anything else is refused
+        extra = sorted(set(data) - set(fields))
+        if extra:
+            raise HTTPException(422, "unknown field: %s" % ", ".join(extra))
     return data
 
 
@@ -366,7 +379,7 @@ async def approval_open(request: Request):
     local_only(request)
     if request.headers.get("origin") is not None:
         raise HTTPException(403, "only the loop opens an approval")
-    body = await json_body(request, MAX_JSON_BYTES)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("event", "images"))
     event = body.get("event")
     try:
         validate(event)
@@ -395,7 +408,7 @@ def approval_get(approval_id: str, request: Request):
 @app.post("/api/approval/{approval_id}/voice")
 async def approval_voice(approval_id: str, request: Request):
     local_only(request)
-    body = await json_body(request, MAX_VOICE_BYTES)
+    body = await json_body(request, MAX_VOICE_BYTES, fields=("wav_base64",))
     b64 = body.get("wav_base64")
     if not isinstance(b64, str) or not b64:
         raise HTTPException(422, "wav_base64 (the audio, base64) is required")
@@ -418,7 +431,7 @@ async def approval_voice(approval_id: str, request: Request):
 @app.post("/api/approval/{approval_id}/decision")
 async def approval_decision(approval_id: str, request: Request):
     local_only(request)
-    body = await json_body(request, MAX_JSON_BYTES)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("decision", "reason"))
     reason = body.get("reason", "")
     return _desk(desk.decide, approval_id, body.get("decision"),
                  reason if isinstance(reason, str) else "")
@@ -480,7 +493,7 @@ async def mandate_draft(request: Request):
     from app.adapters.meta.client import NotConfigured, SpendCapExceeded
     from app.core.policy.compile import MandateRefused
     local_only(request)
-    body = await json_body(request, MAX_VOICE_BYTES)
+    body = await json_body(request, MAX_VOICE_BYTES, fields=("wav_base64",))
     b64 = body.get("wav_base64")
     if not isinstance(b64, str) or not b64:
         raise HTTPException(422, "wav_base64 (the audio, base64) is required")
@@ -539,7 +552,7 @@ async def mandate_sign(request: Request):
     from app.core.policy.compile import sign_policy_dict
     from app.core.evidence import keys
     local_only(request)
-    body = await json_body(request, MAX_JSON_BYTES)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("id",))
     draft_id = body.get("id")
     draft = _drafts.get(draft_id) if isinstance(draft_id, str) else None
     if draft is None:
@@ -560,7 +573,7 @@ async def mandate_sign(request: Request):
 async def mandate_discard(request: Request):
     """{"id"}: forget that draft (the page's Discard). Nothing else changes."""
     local_only(request)
-    body = await json_body(request, MAX_JSON_BYTES)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("id",))
     draft_id = body.get("id")
     found = isinstance(draft_id, str) and _drafts.pop(draft_id, None) is not None
     return {"status": "discarded" if found else "none"}
@@ -744,7 +757,7 @@ async def policy_edit(request: Request):
     from app.core.policy.compile import build_policy_dict, sign_policy_dict
     from app.core.evidence import keys
     local_only(request)
-    body = await json_body(request, MAX_JSON_BYTES)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("max_per_order_usd",))
     usd_max = body.get("max_per_order_usd")
     if not isinstance(usd_max, int) or isinstance(usd_max, bool) or not 1 <= usd_max <= MAX_EDIT_USD:
         raise HTTPException(422, "max_per_order_usd must be a whole number of dollars from 1 to %d" % MAX_EDIT_USD)
@@ -1162,7 +1175,7 @@ def api_run_status(request: Request):
 @app.post("/api/run/cancel")
 async def api_run_cancel(request: Request):
     local_only(request)
-    await json_body(request, MAX_JSON_BYTES)
+    await json_body(request, MAX_JSON_BYTES, fields=())
     cancelled = await run_in_threadpool(runs.cancel)
     return dict(runs.view(), cancelled=cancelled)
 
@@ -1188,7 +1201,7 @@ h1{{color:#104281;font-size:22px}} td{{padding:4px 16px 4px 0}} .muted{{color:#5
 <h1>TESTIGO+ interceptor &middot; running</h1>
 <p class="muted">Simulation only: simulated buyer, supplier and addresses. {time}</p>
 <p>Portal: <a href="{portal}/orders/new?scenario=clean">{portal}</a></p>
-<p>Policy: {sha} &middot; hash {hok}</p>
+<p>Policy: {sha} &middot; hash {hok} &middot; {src} &middot; {trust}</p>
 <p>Signing key: {key}</p>
 <h2 style="font-size:16px">Meta API configuration</h2>
 <table>{rows}</table>
@@ -1197,5 +1210,8 @@ Health JSON: <a href="/health">/health</a></p>
 </body></html>""".format(
         time=html.escape(st["time"]), portal=html.escape(st["portal"]),
         sha=html.escape(st["policy_sha256"]), hok="ok" if st["policy_hash_ok"] else "MISMATCH",
+        src=html.escape(st["policy_source"]),
+        trust="trusted" if st["policy_trusted"] else "<b>NOT TRUSTED</b>: %s (fix it, or restore the demo's rules)"
+              % html.escape(st["policy_problem"]),
         key="present" if st["signing_key_present"] else "missing (run: testigo keygen)",
         rows=rows, n=st["events_stored"])

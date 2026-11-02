@@ -321,3 +321,49 @@ class RunEndpointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Spec12Tests(unittest.TestCase):
+    """Spec 12: unknown fields refused on every JSON route; /status says
+    whether the rules in force are trusted."""
+
+    def setUp(self):
+        import tempfile
+        from fastapi.testclient import TestClient
+        from pathlib import Path
+        self.tmp = Path(tempfile.mkdtemp())
+        self.env = mock.patch.dict(os.environ, {"RUNS_DIR": str(self.tmp)})
+        self.env.start()
+        self.c = TestClient(service.app)
+
+    def tearDown(self):
+        import shutil
+        self.env.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_unknown_fields_are_refused_everywhere(self):
+        for path, body in (("/api/approval/open", {"event": {}, "admin": True}),
+                           ("/api/approval/abc/voice", {"wav_base64": "", "lang": "en"}),
+                           ("/api/approval/abc/decision", {"decision": "approve", "force": True}),
+                           ("/api/mandate/draft", {"wav_base64": "", "rules": []}),
+                           ("/api/mandate/sign", {"id": "x", "policy": {}}),
+                           ("/api/mandate/discard", {"id": "x", "all": True}),
+                           ("/api/policy/edit", {"max_per_order_usd": 900, "deliver_only": []}),
+                           ("/api/run/cancel", {"now": True}),
+                           ("/api/run", {"scenario": "clean", "variant": 1, "supervised": True, "x": 1})):
+            r = self.c.post(path, json=body)
+            self.assertEqual(r.status_code, 422, path)
+            self.assertIn("unknown field", r.json()["detail"], path)
+
+    def test_status_names_an_untrusted_policy(self):
+        from app.common import config
+        st = self.c.get("/health").json()
+        self.assertEqual((st["policy_trusted"], st["policy_source"], st["policy_problem"]), (True, "committed", ""))
+        active = config.active_policy_path()
+        active.parent.mkdir(parents=True)
+        active.write_text("version: 1\nowner: someone\n")
+        st = self.c.get("/health").json()
+        self.assertFalse(st["policy_trusted"])
+        self.assertEqual(st["policy_source"], "signed here")
+        self.assertTrue(st["policy_problem"])
+        self.assertIn("NOT TRUSTED", self.c.get("/status").text)

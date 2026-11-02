@@ -1,6 +1,8 @@
-"""Print versions and check that a portal capture is exactly 1280x800.
+"""Print versions, check this machine is ready (spec 12 O2), and check that a
+portal capture is exactly 1280x800.
 
-Also says which variables are set (names only, never values).
+Says which variables are set (names only, never values) and, for anything not
+ready, what to do.
 """
 
 import importlib.metadata as md
@@ -34,6 +36,12 @@ def main():
     print("\nenv (set / empty):")
     for name, is_set in config.configured(config.MODEL_VARS + ("SCORER_TOKEN",)).items():
         print("  %-18s %s" % (name, "set" if is_set else "empty"))
+
+    from app.common import preflight
+    lines, ready = preflight.report(preflight.checks())
+    print("\nready to run:")
+    print("\n".join(lines))
+    ok = ok and ready
 
     from app.sim.portal import server as portal_server
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), portal_server.Handler)

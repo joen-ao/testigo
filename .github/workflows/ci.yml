@@ -1,0 +1,39 @@
+# Spec 12 O1: on every push and pull request to main, the secrets scan and the
+# whole test suite, with no keys and no model calls (live tests are excluded).
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet -r requirements.lock
+          .venv/bin/python -m pip install --quiet --no-deps -e .
+          .venv/bin/python -m playwright install --with-deps chromium
+      - name: Local settings (no keys)
+        run: |
+          cp .env.example .env
+          .venv/bin/python -m scripts.ensure_scorer_token
+      - name: Secrets scan
+        run: .venv/bin/python -m scripts.check_secrets
+      - name: Tests
+        run: .venv/bin/python -m pytest -q
