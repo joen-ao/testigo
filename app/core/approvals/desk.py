@@ -7,6 +7,8 @@ transcribed (Voice Transcribe) and compared — with `voice_match` — against t
 amount and address **read from the pixels** in the approval.requested event.
 Only a voice that matches unlocks "Approve"; "Deny" is always possible. The
 loop then emits approval.granted with method "voice" and the real transcript.
+Without a microphone, the person can type what they read instead; it is checked
+the same way and the approval says method "typed".
 
 Voice confirms the intent (how much is ordered and where it is delivered). It does not prove who is
 speaking; a passkey would, and it is optional and not used (R8).
@@ -23,6 +25,7 @@ from app.common import clock
 from app.core.approvals import voice_match
 
 MAX_VOICE_ATTEMPTS = 5     # each attempt is a billed Voice Transcribe call
+MAX_TYPED_CHARS = 300
 DECISIONS = ("approve", "deny")
 
 
@@ -94,8 +97,8 @@ class ApprovalDesk:
             rec["attempts"] += 1
             return _copy(rec)
 
-    def record_voice(self, approval_id, transcript, latency_ms=None):
-        """Compare what was heard with what the pixels read. Returns the record."""
+    def record_voice(self, approval_id, transcript, latency_ms=None, source="voice"):
+        """Compare what was heard (or typed) with what the pixels read. Returns the record."""
         with self._lock:
             rec = self._find(approval_id)
             self._pending(rec)
@@ -105,6 +108,7 @@ class ApprovalDesk:
                 transcript, e["amount_cents"], e["address"])
             rec["voice"] = {
                 "transcript": str(transcript or ""),
+                "source": source,
                 "match": ok,
                 "detail": detail,
                 "heard_amount": heard,
@@ -117,6 +121,12 @@ class ApprovalDesk:
                 "at": self._now(),
             }
             return _copy(rec)
+
+    def record_typed(self, approval_id, text):
+        """For a person without a microphone: they type the total and the
+        destination they read on the crops, and it is checked exactly like a
+        transcript. Free (no Voice call), so it does not use up voice attempts."""
+        return self.record_voice(approval_id, str(text or "")[:MAX_TYPED_CHARS], None, source="typed")
 
     def decide(self, approval_id, decision, reason=""):
         """The person's click (or the loop's timeout). Approve needs a voice

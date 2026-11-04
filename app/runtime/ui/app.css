@@ -480,6 +480,9 @@ pre.tail { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .mlive .notice { margin: 0; }
 .vctl { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 4px; }
 .vctl .muted.small { font-size: 14px; }
+.vtype { display: grid; gap: 6px; margin-top: 4px; font-size: 14px; }
+.vtype-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.vtype-row input { flex: 1 1 220px; min-width: 0; font: inherit; padding: 8px 12px; border-radius: 10px; border: 1px solid currentColor; background: transparent; color: inherit; }
 .wave { display: flex; align-items: center; gap: 3px; height: 44px; margin: 4px 0; }
 .wave i { display: block; width: 4px; border-radius: 2px; background: var(--teal); opacity: .8; transform-origin: 50% 50%; }
 .wave.idle i { background: var(--line-2); opacity: 1; }

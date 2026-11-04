@@ -262,10 +262,10 @@ Verify a receipt yourself, without trusting us:
 | --- | --- |
 | `make run` | set up if needed, start portal + interceptor |
 | `make test` | unit tests with test data (no network, no keys) |
-| `make test-live` | tests against real Meta models (needs `.env`) |
+| `make test-live` | unit tests against real Meta models (none today: the real-model checks are WitnessBench and the gate) |
 | `make doctor` | versions, Chromium, a 1280×800 capture of the portal |
 | `make check-secrets` | no keys, signing keys or evidence in files to commit |
-| `make gate` | today's gate checklist |
+| `make gate` | the team's day-0 gate checklist (real models, spends credits; g3 fails by design now that Wonder resists A1 and A2, see WitnessBench) |
 | `make clean` | remove the venv and Python caches |
 
 Real runs (they spend Meta credits; `runs/usage.jsonl` logs every call and

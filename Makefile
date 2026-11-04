@@ -48,11 +48,13 @@ up: $(READY)
 test: $(READY)
 	$(PY) -m pytest
 
-## test-live: tests that call real Meta models (needs .env)
+## test-live: unit tests that call real Meta models (none today; real-model checks are WitnessBench and the gate)
 test-live: $(READY)
-	$(PY) -m pytest -m live
+	@$(PY) -m pytest -m live; code=$$?; \
+	if [ $$code -eq 5 ]; then echo "No live unit tests: the real-model checks are WitnessBench (bench/) and make gate (internal, spends credits)."; exit 0; fi; \
+	exit $$code
 
-## gate: today's gate checklist (real models only; scripts are written by the team)
+## gate: the team's day-0 gate checklist (real models, spends credits; g3 now fails by design: Wonder resists A1 and A2)
 gate: $(READY)
 	@if [ -f gate/run_gate.py ]; then $(PY) -m gate.run_gate; \
 	else echo "gate/run_gate.py not written yet (see docs/specs/F0-infraestructura.md §13)"; exit 1; fi

@@ -61,6 +61,7 @@ const S = {
   history: null, editRules: false, ruleEdit: { busy: false, error: "" },
   // view 5: the approval as the service holds it (/api/approval) and the microphone
   desk: null, deskChecked: false, deskBusy: false, rec: { state: "idle", error: "" },
+  typedOpen: false, typedText: "",
   // view 1: a mandate recorded live. idle | starting | recording | transcribing |
   // draft | refused | signing | signed. The draft lives in the service; the page
   // only shows it and asks the service to sign exactly that draft.
@@ -578,10 +579,17 @@ function approvalCapsule() {
       const recBtn = rec === "recording" || rec === "starting"
         ? `<button class="btn rec on" id="vstop" type="button">${ICON.dot} ${rec === "starting" ? "Cancel" : "Stop"}</button>`
         : `<button class="btn rec" id="vrec" type="button" ${busy ? "disabled" : ""}>${ICON.mic} ${voice ? "Record again" : "Record"}</button>`;
-      const meta = voice
+      const meta = voice && voice.source === "typed" ? "Typed · checked against the screen like a voice"
+        : voice
         ? `Attempt ${esc(d.attempts)} · Voice Transcribe ${esc(voice.latency_ms == null ? "—" : Math.round(voice.latency_ms) + " ms")}`
         : `Up to ${MAX_REC_S} s · the audio is not kept`;
-      controls = `<div class="vctl">${recBtn}<span class="muted small">${meta}</span></div>`;
+      // no microphone: type what the crops say; checked exactly like a transcript
+      const typed = S.typedOpen
+        ? `<form class="vtype" id="vtypeform"><label for="vtyped">Type the total and the destination you read above</label>
+            <div class="vtype-row"><input id="vtyped" type="text" maxlength="300" autocomplete="off" spellcheck="false" value="${esc(S.typedText)}">
+            <button class="btn" id="vtypecheck" type="submit" ${busy ? "disabled" : ""}>Check</button></div></form>`
+        : `<button class="btn-link" id="vtypeopen" type="button">No microphone? Type it instead</button>`;
+      controls = `<div class="vctl">${recBtn}<span class="muted small">${meta}</span></div>${typed}`;
     } else if (!g && !d) {
       controls = `<div class="vctl"><span class="muted small">${S.deskChecked
         ? "This approval is not open in the interface (the run asks in its terminal, or these are test events)."
@@ -591,7 +599,7 @@ function approvalCapsule() {
     const canApprove = open && voice && voice.match && !busy;
     const done = state === "approved" || state === "sending";
     const approveLabel = state === "approved"
-      ? ICON.check + (g.method === "passkey" ? " Approved with passkey" : " Approved · voice + click")
+      ? ICON.check + (g.method === "passkey" ? " Approved with passkey" : g.method === "typed" ? " Approved · typed + click" : " Approved · voice + click")
       : state === "sending" ? ICON.check + " Approved · waiting for the run" : ICON.check + " Approve";
     const why = g && !isGranted(g) && d && d.reason && sameApproval(d.event, a) ? " · " + esc(d.reason) : "";
     const stamp = g ? `<div class="vstamp ${isGranted(g) ? "ok" : "bad"}">${isGranted(g) ? "Approved" : "Not approved"} at ${esc(time(g.ts))}${why}</div>` : "";
@@ -1016,6 +1024,20 @@ async function decide(decision) {
     S.desk = await getJSON(`/api/approval/${encodeURIComponent(d.id)}/decision`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision }) });
+  } catch (err) { S.rec.error = err.message; }
+  S.deskBusy = false; draw();
+}
+
+async function checkTyped(ev) {
+  if (ev) ev.preventDefault();
+  const r = S.runs.supervised, d = deskFor(r.approval);
+  const text = (S.typedText || "").trim();
+  if (!d || S.deskBusy || r.granted || !text) return;
+  S.deskBusy = true; S.rec.error = ""; draw();
+  try {
+    S.desk = await getJSON(`/api/approval/${encodeURIComponent(d.id)}/typed`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }) });
   } catch (err) { S.rec.error = err.message; }
   S.deskBusy = false; draw();
 }

@@ -173,6 +173,27 @@ class ApprovalServiceTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(self.c.get("/api/approval/%s" % rec["id"]).json()["decision"], "approve")
 
+    def test_typed_text_is_checked_like_a_voice(self):
+        # no microphone: the person types what they read; free, so no voice attempt is used
+        rec = self.open()
+        url = "/api/approval/%s/typed" % rec["id"]
+        r = self.c.post(url, json={"text": WRONG}, headers=SAME)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertFalse(r.json()["voice"]["match"])
+        self.assertEqual(self.c.post("/api/approval/%s/decision" % rec["id"],
+                                     json={"decision": "approve"}, headers=SAME).status_code, 409)
+        r = self.c.post(url, json={"text": GOOD}, headers=SAME)
+        v = r.json()["voice"]
+        self.assertTrue(v["match"])
+        self.assertEqual(v["source"], "typed")
+        self.assertEqual(r.json()["attempts"], 0)
+        self.assertEqual(self.c.post(url, json={"text": " "}, headers=SAME).status_code, 422)
+        self.assertEqual(self.c.post(url, json={"text": GOOD, "x": 1}, headers=SAME).status_code, 422)
+        self.assertEqual(self.c.post(url, json={"text": GOOD},
+                                     headers={"Origin": "http://evil.example"}).status_code, 403)
+        self.assertEqual(self.c.post("/api/approval/%s/decision" % rec["id"],
+                                     json={"decision": "approve"}, headers=SAME).status_code, 200)
+
     def test_deny_is_always_possible(self):
         rec = self.open()
         r = self.c.post("/api/approval/%s/decision" % rec["id"], json={"decision": "deny"},
@@ -307,6 +328,17 @@ class ServiceApproverTests(unittest.TestCase):
         e = ev.approval_granted(info["method"], info["voice_transcript"], info["voice_match"],
                                 granted=granted)
         self.assertEqual(e["method"], "voice")
+
+    def test_typed_approval_says_so(self):
+        def act():
+            rec = self.c.get("/api/approval").json()["approval"]
+            if rec and not rec.get("decision"):
+                self.c.post("/api/approval/%s/typed" % rec["id"], json={"text": GOOD}, headers=SAME)
+                self.c.post("/api/approval/%s/decision" % rec["id"], json={"decision": "approve"},
+                            headers=SAME)
+        granted, info = self.approver(act).approve(approval_event())
+        self.assertTrue(granted)
+        self.assertEqual(info, {"method": "typed", "voice_transcript": GOOD, "voice_match": True})
 
     def test_person_denies(self):
         granted, info = self.approver(self.person(GOOD, decision="deny")).approve(approval_event())

@@ -35,13 +35,12 @@ class PolicyTests(unittest.TestCase):
         self.assertTrue(self.p.hash_matches_stored())
 
     def test_signature_is_valid(self):
+        # checked against the committed public key, not this machine's owner key:
+        # a tester's own key (testigo keygen) did not sign the demo rules
         from app.core.evidence import keys
-        from app.common.config import settings
-        key = settings().signing_key_path
-        if not key.is_file():
-            # CI and fresh clones have no owner key (it never leaves the owner's machine)
-            self.skipTest("no owner key at SIGNING_KEY_PATH")
-        pub = keys.public_from_seed(keys.load_seed(key))
+        from app.common.config import committed_policy_pubkey
+        pub = committed_policy_pubkey()
+        self.assertIsNotNone(pub)
         self.assertTrue(self.p.signature_valid(pub))
         self.assertFalse(self.p.signature_valid(keys.public_from_seed(keys.generate_seed())))
 

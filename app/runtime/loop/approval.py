@@ -194,7 +194,8 @@ class ServiceApprover(Approver):
         if not ok:
             return self._denied("the voice re-checked by the run does not match (%s)" % detail,
                                 dict(voice, match=False))
-        return True, {"method": self.METHOD, "voice_transcript": voice.get("transcript", ""),
+        method = "typed" if voice.get("source") == "typed" else self.METHOD
+        return True, {"method": method, "voice_transcript": voice.get("transcript", ""),
                       "voice_match": True}
 
 

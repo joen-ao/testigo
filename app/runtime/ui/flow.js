@@ -247,7 +247,7 @@ function plainText(e, r) {
         ? "Stopped: the screen shows an instruction that is not in the page code."
         : "Stopped: the page code hides an instruction you cannot see."];
     case "approval.requested": return [ICON.pause, "warn", `Asked you to approve ${usd(e.amount_cents)} to ${e.address}.`];
-    case "approval.granted": return isGranted(e) ? [ICON.check, "ok", "You approved by reading it aloud."] : [ICON.stop, "off", "The order was not approved."];
+    case "approval.granted": return isGranted(e) ? [ICON.check, "ok", e.method === "typed" ? "You approved by typing what the screen shows." : "You approved by reading it aloud."] : [ICON.stop, "off", "The order was not approved."];
     case "order.confirmed": return [ICON.box, "info", `The supplier confirmed the order: ${usd(e.amount_cents)}, ship to ${e.address}.`];
     case "verify.result": {
       const review = e.moment === "review";
@@ -688,6 +688,7 @@ const steps = {
         ${approvalCapsule()}</section>` : "";
     return head(`${esc(situation(r.scenario).name)} · ${sup ? "protected by TESTIGO+" : "without TESTIGO+"}`) +
       `<div class="status-line ${status.cls}">${status.icon}<span>${esc(status.text)}</span></div>
+      ${done ? `<div class="actions"><a class="btn-primary" href="#/demo/result" id="seeresult">See the result</a></div>` : ""}
       ${capsule}
       <div class="watch-grid">
         <section class="watch-shot" aria-labelledby="scr-h"><h2 id="scr-h" class="card-h">The agent’s screen</h2>${evidence(r)}</section>
@@ -695,7 +696,6 @@ const steps = {
           ${sup ? "" : `<p class="muted pad">TESTIGO+ is off for this run: nothing is checked.</p>`}${list}</section>
       </div>
       <div class="actions">
-        ${done ? `<a class="btn-primary" href="#/demo/result" id="seeresult">See the result</a>` : ""}
         ${proc && proc.state === "running" ? `<button class="btn-secondary" id="cancelrun" type="button">Stop the run</button>` : ""}
       </div>`;
   },
@@ -930,7 +930,10 @@ function draw() {
   bind();
   if (keep) {
     const el = document.getElementById(keep);
-    if (el && el !== document.activeElement) el.focus({ preventScroll: true });
+    if (el && el !== document.activeElement) {
+      el.focus({ preventScroll: true });
+      if (el.tagName === "INPUT" && el.type === "text") el.setSelectionRange(el.value.length, el.value.length);
+    }
   }
   document.body.dataset.conn = S.conn;
   announce();
@@ -941,6 +944,9 @@ function bind() {
   on("runverify", runVerify); on("verifybtn", runVerify); on("tamperbtn", () => runVerify(true));
   on("vrec", startRecording); on("vstop", () => stopRecording(false));
   on("vapprove", () => decide("approve")); on("vdeny", () => decide("deny"));
+  on("vtypeopen", () => { S.typedOpen = true; draw(); const i = document.getElementById("vtyped"); if (i) i.focus(); });
+  const tf = document.getElementById("vtypeform"); if (tf) tf.onsubmit = checkTyped;
+  const ti = document.getElementById("vtyped"); if (ti) ti.oninput = () => { S.typedText = ti.value; };
   on("mrec", startMandate); on("mstop", () => stopMandate(false));
   on("msign", signMandate); on("mdiscard", discardMandate);
   on("auto", () => { S.auto = !S.auto; draw(); });

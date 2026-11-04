@@ -35,6 +35,7 @@ Approval (F7, view 5; see app/core/approvals/desk.py)
   GET  /api/approval/<id>           one approval, polled by the loop
   POST /api/approval/<id>/voice     a WAV of the person reading aloud (base64 in
                                     JSON) -> Voice Transcribe -> match vs pixels
+  POST /api/approval/<id>/typed     {"text": ...} the same check, typed (no microphone)
   POST /api/approval/<id>/decision  {"decision": "approve"|"deny"}; approve only
                                     after a voice that matched
 
@@ -426,6 +427,17 @@ async def approval_voice(approval_id: str, request: Request):
         except Exception as e:  # noqa: BLE001 - say so on the page; nothing is approved
             raise HTTPException(502, "Voice Transcribe failed: %s" % type(e).__name__)
     return _desk(desk.record_voice, approval_id, text, ms)
+
+
+@app.post("/api/approval/{approval_id}/typed")
+async def approval_typed(approval_id: str, request: Request):
+    """No microphone: the person types the total and the destination they read."""
+    local_only(request)
+    body = await json_body(request, MAX_JSON_BYTES, fields=("text",))
+    text = body.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(422, "text (the total and the destination you read) is required")
+    return _desk(desk.record_typed, approval_id, text)
 
 
 @app.post("/api/approval/{approval_id}/decision")
