@@ -93,6 +93,12 @@ class MatchTests(unittest.TestCase):
         # the reader may join the label, the name and the address on one line
         pixels = "SHIP TO Larkspur Market 120 Harbor Road, Unit 4, Riverton"
         self.assertEqual(name_of(pixels), "Larkspur Market")
+        # Spark on 3 Nov: the address first, the name after it
+        real = "SHIP TO 120 Harbor Road, Unit 4, Riverton Larkspur Market"
+        self.assertEqual(name_of(real), "Larkspur Market")
+        self.assertTrue(voice_matches("Twelve hundred forty dollars, ship to Larkspur Market", 124000, real)[0])
+        self.assertFalse(voice_matches("Twelve hundred forty dollars, ship to Riverton", 124000, real)[0])
+        self.assertEqual(name_of("SHIP TO 88 Mill Street, Riverton Larkspur Market"), "Larkspur Market")
         self.assertTrue(voice_matches(self.GOOD, self.AMOUNT, pixels)[0])
 
     def test_negation_rejects(self):

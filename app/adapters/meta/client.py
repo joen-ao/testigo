@@ -40,7 +40,7 @@ PRICES = {
     "glimmer": {},  # local: no API cost
 }
 
-MAX_RETRIES = 2
+MAX_RETRIES = 3          # 1 + 2 + 4 s of waiting at most
 CALL_TIMEOUT_S = 60     # one hung call must not stall a check (review of F4)
 
 
@@ -282,7 +282,11 @@ def _token_cost(tool, usage):
 def _is_retryable(e):
     try:
         import openai
-        return isinstance(e, (openai.APIConnectionError, openai.APITimeoutError,
-                              openai.RateLimitError))
+        if isinstance(e, (openai.APIConnectionError, openai.APITimeoutError,
+                          openai.RateLimitError)):
+            return True
+        # 502/503/504: the gateway or an overloaded backend refused the call before
+        # any work was done (503 "temporarily overloaded" on 3 Nov), so a retry is safe
+        return isinstance(e, openai.APIStatusError) and getattr(e, "status_code", None) in (502, 503, 504)
     except ImportError:
         return False

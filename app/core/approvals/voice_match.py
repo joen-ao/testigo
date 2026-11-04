@@ -292,10 +292,29 @@ def name_of(address_text):
     street address."""
     text = str(address_text or "")
     m = ADDRESS_RE.search(text)
+    after = ""
     if m:
-        text = text[:m.start()]
-    text = text.split("·")[0].split(" - ")[0]
-    return _LABEL_RE.sub("", text).strip(" ,;:")
+        text, after = text[:m.start()], text[m.end():]
+    name = _LABEL_RE.sub("", text.split("·")[0].split(" - ")[0]).strip(" ,;:")
+    return name or _name_after(after)
+
+
+def _name_after(rest):
+    """The portal also paints the name after the address ("SHIP TO 120 Harbor
+    Road, Unit 4, Riverton Larkspur Market", read by Spark on 3 Nov): skip the
+    unit, directionals and city, and what remains is the name."""
+    words = re.split(r"[\s,;:·]+", rest.split(" - ")[-1])
+    words = [w for w in words if w]
+    i = 0
+    while i < len(words):
+        w = words[i].lower().strip(".#")
+        if w in COMPLEMENTS:
+            i += 2                         # "Unit 4"
+        elif w in CITY_WORDS or w in DIRECTIONALS or w.isdigit():
+            i += 1
+        else:
+            break
+    return " ".join(words[i:])
 
 
 def _find_name(said, name):

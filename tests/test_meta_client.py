@@ -120,11 +120,22 @@ class MetaClientTests(unittest.TestCase):
         self.assertEqual([r["ok"] for r in recs], [False, True])
         self.assertEqual(FakeAPI.calls, 2)
 
-    def test_gives_up_after_two_retries(self):
-        FakeAPI.script = [429, 429, 429]
+    def test_gives_up_after_three_retries(self):
+        FakeAPI.script = [429, 429, 429, 429]
         with self.assertRaises(Exception):
             self.client().chat("spark", [{"role": "user", "content": "hi"}])
-        self.assertEqual(FakeAPI.calls, 3)
+        self.assertEqual(FakeAPI.calls, 4)
+
+    def test_retries_an_overloaded_backend(self):
+        FakeAPI.script = [503, 502]
+        self.client().chat("spark", [{"role": "user", "content": "hi"}])
+        self.assertEqual([r["ok"] for r in self.records()], [False, False, True])
+
+    def test_no_retry_on_a_server_error(self):
+        FakeAPI.script = [500]
+        with self.assertRaises(Exception):
+            self.client().chat("spark", [{"role": "user", "content": "hi"}])
+        self.assertEqual(FakeAPI.calls, 1)
 
     def test_no_retry_on_bad_request(self):
         FakeAPI.script = [400]
