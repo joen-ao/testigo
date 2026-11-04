@@ -797,7 +797,9 @@ function receiptCard(r) {
   const ev = r.receipt;
   const shell = (body, signed) => `<section class="receipt-paper" aria-labelledby="rc-h"><div class="doc-bar"><span>receipt.json</span><span>${signed ? "signed · ed25519" : "no signed receipt"}</span></div>
       <div class="doc-body"><h2 class="doc-title" id="rc-h">${signed ? "Signed receipt" : "Receipt"}</h2>${body}</div></section>`;
-  if (!ev) return shell(`<p class="doc-note">No receipt for this run: receipts are signed only for an order you approved.</p>`, false);
+  if (!ev) return shell(`<p class="doc-note">${r.granted && isGranted(r.granted)
+    ? "No receipt for this run: you approved, but TESTIGO+ never let the agent click Confirm, so no order was placed to sign for."
+    : "No receipt for this run: receipts are signed only for an order you approved."}</p>`, false);
   if (isPlaceholder(ev.signature) || !ev.path) return shell(`<p class="doc-note">A receipt was built but not signed on this machine (the owner key is missing), so there is nothing to verify.</p>`, false);
   const rc = S.receipt, vo = S.verify;
   if (!rc) return shell(`<p class="doc-note">Loading the receipt…</p>`, true);

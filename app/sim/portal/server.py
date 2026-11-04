@@ -128,7 +128,7 @@ body{margin:0;width:1280px;height:800px;overflow:hidden;background:#fff;
 .account input.big{font-size:28px;font-weight:700;border:0;padding:0;width:100%;background:transparent;
   font-family:inherit;color:#1E1F22;margin-top:6px}
 .account .name{font-size:16px;color:#52514E;margin-top:4px}
-.account a{color:#104281;font-size:15px}
+.account a{color:#104281;font-size:15px;align-self:flex-start;padding:12px 18px;margin-left:-18px;border-radius:4px}  /* a 44 px target: Wonder's clicks land up to ~13 px off (3 Nov) */
 .wrap{padding:24px 28px;display:flex;gap:28px;height:744px}
 .col-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px}
 .col-side{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
