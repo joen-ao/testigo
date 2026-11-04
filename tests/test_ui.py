@@ -1112,6 +1112,29 @@ class FlowPageTests(ChromiumCase):
         self.page.wait_for_selector(".verify-res.ok", timeout=20000)
         self.assertIn("Valid: the signature and the evidence match", self.main())
 
+    def test_step_4_receipt_still_signing_after_the_click(self):
+        """Spec 13: between order.confirmed and receipt.signed (~30 s on 4 Nov) the card
+        says the receipt is being signed, never that the agent was not let click."""
+        from app.core.evidence import keys
+        from tests.fixtures.bundles import build_bundle
+        build_bundle("clean", str(self.tmp / "clean"), seed=keys.generate_seed())
+        same = {"approved": {"amount": "USD 1,240.00", "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"},
+                "executed": {"amount": "USD 1,240.00", "address": "Larkspur Market · 120 Harbor Road, Unit 4, Riverton"}}
+        h = {"amount": "a" * 64, "address": "b" * 64}
+        self.events(ev.run_started("supervised", "clean"), self.approval(),
+                    ev.approval_granted("voice", "Twelve hundred forty dollars, ship to Larkspur Market", True),
+                    ev.verify_result(9, "match", h, h, moment="review", read=same),
+                    ev.order_confirmed(10, "Larkspur Market · 120 Harbor Road, Unit 4, Riverton", 124000))
+        self.open("#/demo/result", "#rc-pending")
+        card = self.page.inner_text(".receipt-paper")
+        self.assertIn("Signing the receipt", card)
+        self.assertIn("signing…", card)
+        self.assertNotIn("never let the agent click Confirm", card)
+        self.events(ev.verify_result(12, "match", h, h, moment="result", read=same),
+                    ev.receipt_signed("r-clean", "ed25519:abc", path="clean/receipt.json"))
+        self.page.wait_for_selector("#verifybtn")
+        self.assertIn("Signed receipt", self.page.inner_text(".receipt-paper"))
+
 
     # -- review fixes -------------------------------------------------------
     def test_cancel_during_an_approval_closes_it_on_the_page(self):

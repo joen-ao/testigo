@@ -795,11 +795,30 @@ function verifyTerm(rc) {
 }
 function receiptCard(r) {
   const ev = r.receipt;
-  const shell = (body, signed) => `<section class="receipt-paper" aria-labelledby="rc-h"><div class="doc-bar"><span>receipt.json</span><span>${signed ? "signed · ed25519" : "no signed receipt"}</span></div>
+  const shell = (body, signed, pending) => `<section class="receipt-paper" aria-labelledby="rc-h"><div class="doc-bar"><span>receipt.json</span><span>${signed ? "signed · ed25519" : pending ? (r.order ? "signing…" : "waiting…") : "no signed receipt"}</span></div>
       <div class="doc-body"><h2 class="doc-title" id="rc-h">${signed ? "Signed receipt" : "Receipt"}</h2>${body}</div></section>`;
-  if (!ev) return shell(`<p class="doc-note">${r.granted && isGranted(r.granted)
-    ? "No receipt for this run: you approved, but TESTIGO+ never let the agent click Confirm, so no order was placed to sign for."
-    : "No receipt for this run: receipts are signed only for an order you approved."}</p>`, false);
+  if (!ev) {
+    // spec 13: the receipt is signed ~30 s after order.confirmed (TESTIGO+ reads
+    // the result screen again first), so "no receipt" depends on what happened
+    // the process this page started counts only if it is this run (same scenario,
+    // run.started inside its lifetime); a finished earlier run says nothing here
+    const p = procFor(r), t0 = r.log[0] && Date.parse(r.log[0].ts);
+    const mine = !!p && p.scenario === r.scenario && !(t0 < Date.parse(p.started) - 5000)
+      && !(p.ended && t0 > Date.parse(p.ended));
+    const ended = mine && p.state !== "running";
+    const unsigned = r.log.some(e => e.type === "agent.step" && /^receipt not (signed|written)/.test(e.label || ""));
+    const approved = !!r.granted && isGranted(r.granted);
+    const note = r.order
+      ? (unsigned ? "The order went through, but the receipt could not be signed on this machine."
+        : ended ? "The order went through, but this run ended without a receipt."
+        : "Signing the receipt… TESTIGO+ reads the screen once more after the click, then signs it. This takes about half a minute.")
+      : approved
+        ? (ended ? "No receipt for this run: you approved, but TESTIGO+ never let the agent click Confirm, so no order was placed to sign for."
+          : "You approved. Waiting for the agent to confirm the order; the receipt is signed after that.")
+        : "No receipt for this run: receipts are signed only for an order you approved.";
+    const pending = !ended && !unsigned && (!!r.order || approved);
+    return shell(`<p class="doc-note"${pending ? ' id="rc-pending"' : ""}>${note}</p>`, false, pending);
+  }
   if (isPlaceholder(ev.signature) || !ev.path) return shell(`<p class="doc-note">A receipt was built but not signed on this machine (the owner key is missing), so there is nothing to verify.</p>`, false);
   const rc = S.receipt, vo = S.verify;
   if (!rc) return shell(`<p class="doc-note">Loading the receipt…</p>`, true);
